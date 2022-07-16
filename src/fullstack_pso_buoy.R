@@ -81,7 +81,7 @@ autogen_cnn<-function(dfs,n.s,params){
   starts<-merge%>%layer_dense(units=n.s*2)%>%layer_activation_leaky_relu(0.01) 
   
   visl[[ipp+1]]<-layer_input(shape=c(dim(dfs$dummy)[2]))
-  dumw<-visl[[ipp+1]]%>%layer_dense(units=params*2)%>%layer_activation_leaky_relu(0.0001) 
+  dumw<-visl[[ipp+1]]%>%layer_dense(units=params*2)%>%layer_activation_leaky_relu(1e-4) 
   
   output <- layer_concatenate(list(rots,starts,dumw))
   
@@ -109,7 +109,7 @@ pop_coil<-function(input,readout=F){
   cnn_outputs <- as.array(val_out)
   rots<-abs(cnn_outputs[1:3])*10
   stmat<-(matrix(cnn_outputs[(4):(4+n.s*2-1)],nrow=2))
-  startvals<-complex(n.s,stmat[1,],stmat[2,])
+  startvals<-complex(n.s,stmat[1,],stmat[2,])/10
   randmat<-matrix(cnn_outputs[(4+n.s*2):length(cnn_outputs)],nrow=2)
   RandVec<-complex(rdim,randmat[1,],randmat[2,])
   coil_out<-(runcoil(RandVec,rots,startvals))
@@ -173,15 +173,26 @@ step_swarm<-function(swarm_size,L=length(avec),w=0.9,g_p=0.4,g_g=0.4){
 
 
 # Running -----------------------------------------------------------------
+
+#Source Buoy Data
+library(forecastML)
+
+data("data_buoy",package="forecastML")
+
+clean=data_buoy
+clean[is.na(clean)]=0
+
 lookback=20
 lookforward=30
 
-df=as.data.frame(matrix(runif(5000,0,1),ncol=5))
-df$V1=1:1000
-predictors=c("V1","V2","V3","V4")
-objective=c("V5")
+df=clean
+predictors=c("wind_spd","air_temperature")
+objective=c("sea_surface_temperature")
 
 dfw<-lookwindow(df,lookback,lookforward,predictors,objective)
+
+lookback=20
+lookforward=30
 
 scaledat<-scalelist(dfw,objrange=c(0.2,0.6))
 scalesaves<-scaledat$scalesaves
@@ -193,7 +204,7 @@ sym=F   #Parameter Symmetry
 loc=F #Locality
 cont=T #Parameter Physicality Controls
 sub.num=1 #Number of conserved subgroups
-vfara_inert=lookforward #inertia
+vfara_inert=lookforward/2#inertia
 vfara_init=1000 #initial inertia
 Tlen=lookforward #Steps to run coil
 loadvals=T #Load in previously learned values?
@@ -219,8 +230,9 @@ for (xsel in xsamps){
 }
 
 outputs<-dfs$objective[[1]][xsamps,]
+outputs<-t(apply(dfs$objective[[1]][xsamps,],1,function(x)scaledata(x,c(0.2,0.6))$scaled))
 
-n.part=30
+n.part=10
 initialize_swarm(n.part)
 Esave=c()
 for (itt in 1:10){

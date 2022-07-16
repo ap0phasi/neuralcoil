@@ -124,7 +124,7 @@ runcoil=function(RandVec,rotvals,startvals){
     etemp=expand.grid(c(1:length(name.states)),c(1:length(name.states)))
     etemp=etemp[!(etemp[,1]==etemp[,2]),]
     Exk=split(t(etemp), rep(1:(length(name.states)-1), each = 2))
-    mfac=0
+    mfac=1
     for (iske in Exk){
       Eindx1=grepl(paste0(name.states[iske[1]],"[-]",name.states[iske[2]],"[|]",name.states[iske[2]],"[-]",name.states[iske[1]]),CoilVals$Name)
       CoilVals$Value[Eindx1]=CoilVals$Value[Eindx1]*mfac
