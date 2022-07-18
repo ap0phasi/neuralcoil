@@ -191,9 +191,15 @@ objective=c("sea_surface_temperature")
 
 dfw<-lookwindow(df,lookback,lookforward,predictors,objective)
 
-scaledat<-scalelist(dfw,objrange=c(0.2,0.6))
+scale_offset=5
+propchanges=(dfw$objective$sea_surface_temperature)/(dfw$predictors$sea_surface_temperature[1:length(dfw$objective$sea_surface_temperature[,1]),lookback]+scale_offset)
+
+
+scaledat<-scalelist(dfw,objrange=c(0,1))
 scalesaves<-scaledat$scalesaves
 dfs<-scaledat$scaledlist
+
+dfs$objective$sea_surface_temperature=propchanges
 
 #User Selections----
 n.s=4#number of states
@@ -215,7 +221,7 @@ weightdim=lapply(weights, dim)
 avec<-unlist(weights)
 
 
-xsamps=sample(1:1e2,3)
+xsamps=sample(1:10,3)
 inputlist=list()
 for (xsel in xsamps){
   inputs=list()
@@ -227,13 +233,12 @@ for (xsel in xsamps){
 }
 
 outputs<-dfs$objective[[1]][xsamps,]
-outputs<-t(apply(dfs$objective[[1]][xsamps,],1,function(x)scaledata(x,c(0.2,0.6))$scaled))
 
 n.part=30
 initialize_swarm(n.part)
 
 Esave=c()
-for (itt in 1:100){
+for (itt in 1:10){
   step_swarm(n.part)
   Esave=c(Esave,min(bestgs))
   plot(Esave,type="l")

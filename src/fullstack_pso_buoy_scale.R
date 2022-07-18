@@ -185,11 +185,17 @@ clean[is.na(clean)]=0
 lookback=10
 lookforward=20
 
-df=clean
+df=clean[1:100,]
 predictors=c("wind_spd","air_temperature")
 objective=c("sea_surface_temperature")
 
 dfw<-lookwindow(df,lookback,lookforward,predictors,objective)
+
+propchanges=(dfw$objective$sea_surface_temperature-dfw$predictors$sea_surface_temperature[1:length(dfw$objective$sea_surface_temperature[,1]),lookback])/dfw$predictors$sea_surface_temperature[1:length(dfw$objective$sea_surface_temperature[,1]),lookback]
+propchanges[propchanges>0.7]=0.7
+
+dfw$objective$sea_surface_temperature=propchanges
+
 
 scaledat<-scalelist(dfw,objrange=c(0.2,0.6))
 scalesaves<-scaledat$scalesaves
@@ -215,7 +221,7 @@ weightdim=lapply(weights, dim)
 avec<-unlist(weights)
 
 
-xsamps=sample(1:1e2,3)
+xsamps=sample(1:dim(dfs$objective[[1]])[1],3)
 inputlist=list()
 for (xsel in xsamps){
   inputs=list()
@@ -227,13 +233,12 @@ for (xsel in xsamps){
 }
 
 outputs<-dfs$objective[[1]][xsamps,]
-outputs<-t(apply(dfs$objective[[1]][xsamps,],1,function(x)scaledata(x,c(0.2,0.6))$scaled))
 
 n.part=30
 initialize_swarm(n.part)
 
 Esave=c()
-for (itt in 1:100){
+for (itt in 1:10){
   step_swarm(n.part)
   Esave=c(Esave,min(bestgs))
   plot(Esave,type="l")
@@ -246,7 +251,7 @@ for (iii in 1:length(inputlist)){
   inputs=inputlist[[iii]]
   coil_out=pop_coil(inputs,readout = T)
   
-  plot(outputs[iii,],ylim=c(0,1))
+  plot(outputs[iii,])
   print(coil_out[[1]][1,1])
   lines(coil_out[[1]][,1])
 }
