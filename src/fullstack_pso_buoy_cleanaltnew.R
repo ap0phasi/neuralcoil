@@ -6,6 +6,8 @@ library(tensorflow)
 library(tfautograph)
 library(keras)
 
+Sys.setenv(TF_AVGPOOL_USE_CUDNN=1)
+
 scaledata<-function(x,range){
   scaled=((x-min(x))/(max(x)-min(x)))*(range[2]-range[1])+range[1]
   return(list(scaled=scaled,scaler=c(min(x),max(x))))
@@ -62,14 +64,18 @@ scalelist<-function(dfw,predrange=c(0,1),objrange=c(0.2,0.6)){
 #Generate Coil According to User specifications
 source("src/complex_coil_gen.R")
 
+layer_activation_seagull<-function(x,alpha,decay=1e3){
+  k_minimum(1,k_abs(layer_activation_leaky_relu(x,alpha)/decay))
+}
+
 autogen_cnn<-function(dfs,n.s,params){
   visl<-list()
   cnnl<-list()
   for (ipp in 1:length(dfs$predictors)){
     visl[[ipp]]<-layer_input(shape=c(dim(dfs$predictors[[ipp]])[2],1))
     cnnl[[ipp]]<-visl[[ipp]]%>%
-      layer_conv_1d(filters=64,kernel_size=2,input_shape=c(dim(dfs$predictors[[ipp]])[2],1),activation="relu")%>%
-      layer_max_pooling_1d(pool_size=2)%>%
+      layer_conv_1d(filters=64,kernel_size=2,input_shape=c(dim(dfs$predictors[[ipp]])[2],1),activation="relu",batch_size = 1)%>%
+      layer_max_pooling_1d(pool_size=2,batch_size = 1)%>%
       layer_flatten()
   }
   merge<-layer_concatenate(cnnl)%>%
@@ -78,10 +84,10 @@ autogen_cnn<-function(dfs,n.s,params){
   
   rots<-merge%>%layer_dense(units=3,activation = "linear")
   
-  starts<-merge%>%layer_dense(units=n.s*2)%>%layer_activation_leaky_relu(0.01) 
+  starts<-merge%>%layer_dense(units=n.s*2)%>%layer_activation_seagull(0.1)
   
   visl[[ipp+1]]<-layer_input(shape=c(dim(dfs$dummy)[2]))
-  dumw<-visl[[ipp+1]]%>%layer_dense(units=params*2)%>%layer_activation_leaky_relu(1e-4) 
+  dumw<-visl[[ipp+1]]%>%layer_dense(units=params*2)%>%layer_activation_seagull(0.1)
   
   output <- layer_concatenate(list(rots,starts,dumw))
   
@@ -107,9 +113,11 @@ pop_coil<-function(input,readout=F){
   val_out=model(input, training = TRUE)
   cnn_outputs <- as.array(val_out)
   rots<-abs(cnn_outputs[1:3])*10
-  stmat<-abs(matrix(cnn_outputs[(4):(4+n.s*2-1)],nrow=2))
-  startvals<-(complex(n.s,stmat[1,],stmat[2,])/10)
-  randmat<-abs(matrix(cnn_outputs[(4+n.s*2):length(cnn_outputs)],nrow=2))
+  stv<-cnn_outputs[(4):(4+n.s*2-1)]
+  rvs<-cnn_outputs[(4+n.s*2):length(cnn_outputs)]
+  stmat<-(matrix(stv,nrow=2))
+  startvals<-(complex(n.s,stmat[1,],stmat[2,]))
+  randmat<-(matrix(rvs,nrow=2))
   RandVec<-complex(rdim,randmat[1,],randmat[2,])
   coil_out<-(runcoil(RandVec,rots,startvals))
   if (readout){
@@ -165,8 +173,8 @@ step_swarm<-function(swarm_size,L=length(avec),w=0.9,g_p=0.4,g_g=0.4){
   vel<<-n_v+w*vel+g_p*r_p*(bestp-x.p)+g_g*r_g*(best_g_mat-x.p)-sweep((x.p-closest.neighbor),2,repulse.factor,"*")
   
   x.p<<-x.p+vel
-  x.p[x.p<-1]=-1
-  x.p[x.p>1]=1
+  x.p[x.p<(-3)]=-3
+  x.p[x.p>3]=3
   x.p<<-x.p
 }
 
@@ -206,10 +214,13 @@ sym=F   #Parameter Symmetry
 loc=F #Locality
 cont=T #Parameter Physicality Controls
 sub.num=1 #Number of conserved subgroups
-vfara_inert=lookforward*5000#inertia
-vfara_init=1e3 #initial inertia
+vfara_inert=60#inertia
+vfara_init=100 #initial inertia
 Tlen=lookforward #Steps to run coil
-loadvals=T #Load in previously learned values?
+loadvals=F #Load in previously learned values?
+if (loadvals){
+  savedweights<-readRDS("results/buoy_v3.RdA")
+}
 
 buildcoil(n.s,sym=sym)
 
@@ -220,8 +231,9 @@ weightdim=lapply(weights, dim)
 avec<-unlist(weights)
 
 
-xsamps=sample(1:dim(dfs$objective[[1]])[1],15)
-#xsamps=c(3,72,44,100,145)[1:5]
+#xsamps=sample(1:dim(dfs$objective[[1]])[1],15)
+xsamps=c(3,72,44,100,145)[1]
+
 inputlist=list()
 for (xsel in xsamps){
   inputs=list()
@@ -232,19 +244,23 @@ for (xsel in xsamps){
   inputlist[[paste(xsel)]]=inputs
 }
 
-outputs<-dfs$objective[[1]][xsamps,]
+outputs<-matrix(dfs$objective[[1]][xsamps,],nrow=length(xsamps))
 
-n.part=100
-initialize_swarm(n.part)
-
-Esave=c()
-for (itt in 1:200){
-  step_swarm(n.part)
-  Esave=c(Esave,min(bestgs))
-  plot(Esave,type="l")
+if (loadvals){
+  assign_weights(weights,weightdim,savedweights)
+}else{
+  n.part=200
+  initialize_swarm(n.part)
+  
+  Esave=c()
+  for (itt in 1:10){
+    step_swarm(n.part)
+    Esave=c(Esave,min(bestgs))
+    plot(Esave,type="l")
+  }
+  
+  assign_weights(weights,weightdim,bestp[which.min(bestgs),])
 }
-
-assign_weights(weights,weightdim,bestp[which.min(bestgs),])
 
 outsave=c()
 par(mfrow=c(length(inputlist),1),mar=c(0,4,0,0))

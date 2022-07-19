@@ -78,10 +78,10 @@ autogen_cnn<-function(dfs,n.s,params){
   
   rots<-merge%>%layer_dense(units=3,activation = "linear")
   
-  starts<-merge%>%layer_dense(units=n.s*2)%>%layer_activation_leaky_relu(0.01) 
+  starts<-merge%>%layer_dense(units=n.s*2)%>%layer_activation_leaky_relu(0.1)
   
   visl[[ipp+1]]<-layer_input(shape=c(dim(dfs$dummy)[2]))
-  dumw<-visl[[ipp+1]]%>%layer_dense(units=params*2)%>%layer_activation_leaky_relu(1e-4) 
+  dumw<-visl[[ipp+1]]%>%layer_dense(units=params*2)%>%layer_activation_leaky_relu(0.1)
   
   output <- layer_concatenate(list(rots,starts,dumw))
   
@@ -107,9 +107,11 @@ pop_coil<-function(input,readout=F){
   val_out=model(input, training = TRUE)
   cnn_outputs <- as.array(val_out)
   rots<-abs(cnn_outputs[1:3])*10
-  stmat<-abs(matrix(cnn_outputs[(4):(4+n.s*2-1)],nrow=2))
-  startvals<-(complex(n.s,stmat[1,],stmat[2,])/10)
-  randmat<-abs(matrix(cnn_outputs[(4+n.s*2):length(cnn_outputs)],nrow=2))
+  stv<-pmin(1,abs(cnn_outputs[(4):(4+n.s*2-1)])/100)
+  rvs<-pmin(1,abs(cnn_outputs[(4+n.s*2):length(cnn_outputs)])/100)
+  stmat<-(matrix(stv,nrow=2))
+  startvals<-(complex(n.s,stmat[1,],stmat[2,]))
+  randmat<-(matrix(rvs,nrow=2))
   RandVec<-complex(rdim,randmat[1,],randmat[2,])
   coil_out<-(runcoil(RandVec,rots,startvals))
   if (readout){
@@ -206,8 +208,8 @@ sym=F   #Parameter Symmetry
 loc=F #Locality
 cont=T #Parameter Physicality Controls
 sub.num=1 #Number of conserved subgroups
-vfara_inert=lookforward*5000#inertia
-vfara_init=1e3 #initial inertia
+vfara_inert=lookforward#inertia
+vfara_init=1 #initial inertia
 Tlen=lookforward #Steps to run coil
 loadvals=T #Load in previously learned values?
 
@@ -220,8 +222,8 @@ weightdim=lapply(weights, dim)
 avec<-unlist(weights)
 
 
-xsamps=sample(1:dim(dfs$objective[[1]])[1],15)
-#xsamps=c(3,72,44,100,145)[1:5]
+#xsamps=sample(1:dim(dfs$objective[[1]])[1],15)
+xsamps=c(3,72,44,100,145)[1:3]
 inputlist=list()
 for (xsel in xsamps){
   inputs=list()
@@ -238,7 +240,7 @@ n.part=100
 initialize_swarm(n.part)
 
 Esave=c()
-for (itt in 1:200){
+for (itt in 1:100){
   step_swarm(n.part)
   Esave=c(Esave,min(bestgs))
   plot(Esave,type="l")

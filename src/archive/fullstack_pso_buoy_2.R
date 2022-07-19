@@ -107,9 +107,9 @@ pop_coil<-function(input,readout=F){
   val_out=model(input, training = TRUE)
   cnn_outputs <- as.array(val_out)
   rots<-abs(cnn_outputs[1:3])*10
-  stmat<-abs(matrix(cnn_outputs[(4):(4+n.s*2-1)],nrow=2))
-  startvals<-(complex(n.s,stmat[1,],stmat[2,])/10)
-  randmat<-abs(matrix(cnn_outputs[(4+n.s*2):length(cnn_outputs)],nrow=2))
+  stmat<-(matrix(cnn_outputs[(4):(4+n.s*2-1)],nrow=2))
+  startvals<-complex(n.s,stmat[1,],stmat[2,])/10
+  randmat<-matrix(cnn_outputs[(4+n.s*2):length(cnn_outputs)],nrow=2)
   RandVec<-complex(rdim,randmat[1,],randmat[2,])
   coil_out<-(runcoil(RandVec,rots,startvals))
   if (readout){
@@ -181,22 +181,16 @@ data("data_buoy",package="forecastML")
 clean=data_buoy
 clean[is.na(clean)]=0
 
-
-clean$group=lubridate::floor_date(data_buoy$date,"10 day")
-clean<-as.data.frame(clean%>%group_by(group)%>%summarise_all(mean))
 lookback=10
-lookforward=30
+lookforward=20
 
+df=clean
 predictors=c("wind_spd","air_temperature")
 objective=c("sea_surface_temperature")
 
-df=clean%>%select(c(predictors,objective))
-df=df[df$sea_surface_temperature>0,]
-
 dfw<-lookwindow(df,lookback,lookforward,predictors,objective)
 
-scaleran=c(0.2,0.6)
-scaledat<-scalelist(dfw,objrange=scaleran)
+scaledat<-scalelist(dfw,objrange=c(0.2,0.6))
 scalesaves<-scaledat$scalesaves
 dfs<-scaledat$scaledlist
 
@@ -206,12 +200,12 @@ sym=F   #Parameter Symmetry
 loc=F #Locality
 cont=T #Parameter Physicality Controls
 sub.num=1 #Number of conserved subgroups
-vfara_inert=lookforward*5000#inertia
-vfara_init=1e3 #initial inertia
+vfara_inert=lookforward/2#inertia
+vfara_init=1000 #initial inertia
 Tlen=lookforward #Steps to run coil
 loadvals=T #Load in previously learned values?
 
-buildcoil(n.s,sym=sym)
+buildcoil(n.s,sym=F)
 
 model<-autogen_cnn(dfs,n.s,dim(CoilVals)[1])
 
@@ -220,8 +214,7 @@ weightdim=lapply(weights, dim)
 avec<-unlist(weights)
 
 
-xsamps=sample(1:dim(dfs$objective[[1]])[1],15)
-#xsamps=c(3,72,44,100,145)[1:5]
+xsamps=sample(1:1e2,3)
 inputlist=list()
 for (xsel in xsamps){
   inputs=list()
@@ -233,12 +226,13 @@ for (xsel in xsamps){
 }
 
 outputs<-dfs$objective[[1]][xsamps,]
+outputs<-t(apply(dfs$objective[[1]][xsamps,],1,function(x)scaledata(x,c(0.2,0.6))$scaled))
 
-n.part=100
+n.part=30
 initialize_swarm(n.part)
 
 Esave=c()
-for (itt in 1:200){
+for (itt in 1:100){
   step_swarm(n.part)
   Esave=c(Esave,min(bestgs))
   plot(Esave,type="l")
@@ -246,26 +240,13 @@ for (itt in 1:200){
 
 assign_weights(weights,weightdim,bestp[which.min(bestgs),])
 
-outsave=c()
 par(mfrow=c(length(inputlist),1),mar=c(0,4,0,0))
 for (iii in 1:length(inputlist)){
   inputs=inputlist[[iii]]
   coil_out=pop_coil(inputs,readout = T)
   
-  plot(outputs[iii,],col="blue",type="l")
+  plot(outputs[iii,],ylim=c(0,1))
   print(coil_out[[1]][1,1])
-  matlines(coil_out[[1]],col="grey")
-  lines(coil_out[[1]][,1],col="red")
-  
-  outsave=rbind(outsave,coil_out[[1]][,1])
+  lines(coil_out[[1]][,1])
 }
 par(mfrow=c(1,1),mar=c(4,4,4,4))
-
-plot(df[[objective]][-(1:lookback)],type="l",lwd=1.5)
-for (ix in 1:length(xsamps)){
-  invres=invertscaling(outsave[ix,],scalesaves[dim(scalesaves)[1],],scaleran)
-  invobs=invertscaling(outputs[ix,],scalesaves[dim(scalesaves)[1],],scaleran)
-  lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invres,col="red",lwd=2)
-  #=lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invobs,col="blue")
-}
-

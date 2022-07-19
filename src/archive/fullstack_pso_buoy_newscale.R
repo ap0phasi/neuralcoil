@@ -103,7 +103,6 @@ assign_weights<-function(weights,weightdim,avec){
 }
 
 pop_coil<-function(input,readout=F){
-  model(input, training = TRUE)
   rdim<-dim(CoilVals)[1]
   val_out=model(input, training = TRUE)
   cnn_outputs <- as.array(val_out)
