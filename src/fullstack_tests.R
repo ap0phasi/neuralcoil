@@ -82,8 +82,7 @@ autogen_cnn<-function(dfs,n.s,params){
     layer_dense(units=32,activation="relu")%>%
     layer_dense(units=16,activation="relu")
   
-  #rots<-merge%>%layer_dense(units=3)%>%layer_activation_seagull(0.1,decay=100)
-  rots<-merge%>%layer_dense(units=3,activation="linear")
+  rots<-merge%>%layer_dense(units=3,activation = "linear")
   
   starts<-merge%>%layer_dense(units=n.s*2)%>%layer_activation_seagull(0.1)
   
@@ -113,7 +112,6 @@ pop_coil<-function(input,readout=F){
   rdim<-dim(CoilVals)[1]
   val_out=model(input, training = TRUE)
   cnn_outputs <- as.array(val_out)
-  #rots<-(cnn_outputs[1:3])*100
   rots<-abs(cnn_outputs[1:3])
   stv<-cnn_outputs[(4):(4+n.s*2-1)]
   rvs<-cnn_outputs[(4+n.s*2):length(cnn_outputs)]
@@ -148,9 +146,6 @@ eval_weights<-function(avec,inputlist,outputs){
 initialize_swarm<-function(swarm_size,L=length(avec),locfac=0.6){
   x.p<<-matrix(runif(swarm_size*L,-1,1),nrow=swarm_size,ncol=L)
   vel<<-matrix(runif(swarm_size*L,-0.1,0.1),nrow=swarm_size,ncol=L)
-  if (retrain){
-    x.p[1,]<-savedweights
-  }
   locality<<-locfac*swarm_size
   outgs<<-apply(x.p,1,function(aa)eval_weights(aa,inputlist,outputs))
   bestgs<<-outgs
@@ -222,11 +217,10 @@ sub.num=1 #Number of conserved subgroups
 vfara_inert=60#inertia
 vfara_init=100 #initial inertia
 Tlen=lookforward #Steps to run coil
-loadvals=T #Load in previously learned values?
+loadvals=F #Load in previously learned values?
 if (loadvals){
-  savedweights<-readRDS("results/buoy_v9.RdA")
+  savedweights<-readRDS("results/buoy_v3.RdA")
 }
-retrain=F
 
 buildcoil(n.s,sym=sym)
 
@@ -238,7 +232,7 @@ avec<-unlist(weights)
 
 
 #xsamps=sample(1:dim(dfs$objective[[1]])[1],15)
-xsamps=c(3,72,44,100,145)[1:5]
+xsamps=c(3,72,44,100,145)[1:3]
 
 inputlist=list()
 for (xsel in xsamps){
@@ -252,14 +246,14 @@ for (xsel in xsamps){
 
 outputs<-matrix(dfs$objective[[1]][xsamps,],nrow=length(xsamps))
 
-if (loadvals&!retrain){
+if (loadvals){
   assign_weights(weights,weightdim,savedweights)
 }else{
   n.part=10
   initialize_swarm(n.part)
   
   Esave=c()
-  for (itt in 1:100){
+  for (itt in 1:10){
     step_swarm(n.part)
     Esave=c(Esave,min(bestgs))
     plot(Esave,type="l")

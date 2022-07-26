@@ -166,7 +166,6 @@ step_swarm<-function(swarm_size,L=length(avec),w=0.9,g_p=0.4,g_g=0.4){
   r_g=matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
   
   cmat=t(apply(x.p,1,function(z) order(apply(x.p,1,function(y) sum(abs(y-z))))[-1][1:locality]))
-  closest.neighbor=x.p[cmat[,1],]
   
   best_g_mat<<-t(apply(cmat,1,function(a) x.p[a,][which.min(outgs[a]),]))
   
@@ -174,8 +173,7 @@ step_swarm<-function(swarm_size,L=length(avec),w=0.9,g_p=0.4,g_g=0.4){
   bestp[new.ind,]<<-x.p[new.ind,]
   bestgs[new.ind]<<-outgs[new.ind]
   
-  repulse.factor=0
-  vel<<-n_v+w*vel+g_p*r_p*(bestp-x.p)+g_g*r_g*(best_g_mat-x.p)-sweep((x.p-closest.neighbor),2,repulse.factor,"*")
+  vel<<-n_v+w*vel+g_p*r_p*(bestp-x.p)+g_g*r_g*(best_g_mat-x.p)
   
   x.p<<-x.p+vel
   x.p[x.p<(-3)]=-3
@@ -224,9 +222,9 @@ vfara_init=100 #initial inertia
 Tlen=lookforward #Steps to run coil
 loadvals=T #Load in previously learned values?
 if (loadvals){
-  savedweights<-readRDS("results/buoy_v9.RdA")
+  savedweights<-readRDS("results/buoy_v10.RdA")
 }
-retrain=F
+retrain=T #Retrain from saved weights?
 
 buildcoil(n.s,sym=sym)
 
@@ -238,7 +236,7 @@ avec<-unlist(weights)
 
 
 #xsamps=sample(1:dim(dfs$objective[[1]])[1],15)
-xsamps=c(3,72,44,100,145)[1:5]
+xsamps=c(3,72,44,100,145)[1:3]
 
 inputlist=list()
 for (xsel in xsamps){

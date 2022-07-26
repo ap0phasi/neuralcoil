@@ -226,7 +226,7 @@ loadvals=T #Load in previously learned values?
 if (loadvals){
   savedweights<-readRDS("results/buoy_v9.RdA")
 }
-retrain=F
+retrain=T #Retrain from saved weights?
 
 buildcoil(n.s,sym=sym)
 
@@ -255,7 +255,7 @@ outputs<-matrix(dfs$objective[[1]][xsamps,],nrow=length(xsamps))
 if (loadvals&!retrain){
   assign_weights(weights,weightdim,savedweights)
 }else{
-  n.part=10
+  n.part=100
   initialize_swarm(n.part)
   
   Esave=c()

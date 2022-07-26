@@ -109,11 +109,10 @@ assign_weights<-function(weights,weightdim,avec){
   set_weights(model,weightsnew)
 }
 
-pop_coil<-function(input,readout=F){
+get_params<-function(input){
   rdim<-dim(CoilVals)[1]
   val_out=model(input, training = TRUE)
   cnn_outputs <- as.array(val_out)
-  #rots<-(cnn_outputs[1:3])*100
   rots<-abs(cnn_outputs[1:3])
   stv<-cnn_outputs[(4):(4+n.s*2-1)]
   rvs<-cnn_outputs[(4+n.s*2):length(cnn_outputs)]
@@ -121,6 +120,14 @@ pop_coil<-function(input,readout=F){
   startvals<-(complex(n.s,stmat[1,],stmat[2,]))
   randmat<-(matrix(rvs,nrow=2))
   RandVec<-complex(rdim,randmat[1,],randmat[2,])
+  return(list(RandVec=RandVec,rots=rots,startvals=startvals))
+}
+
+pop_coil<-function(input,readout=F){
+  model_out<-get_params(input)
+  RandVec<-model_out$RandVec
+  rots<-model_out$rots
+  startvals<-model_out$startvals
   coil_out<-(runcoil(RandVec,rots,startvals))
   if (readout){
     print(rots)
@@ -133,13 +140,13 @@ lossfun<-function(actual,predicted){
   mean((actual-predicted)^2)
 }
 
-eval_weights<-function(avec,inputlist,outputs){
+eval_weights<-function(avec,inputlist,outputs,sel=seq(1,lookforward)){
   assign_weights(weights,weightdim,avec)
   errors=c()
   for (iii in 1:length(inputlist)){
     inputs=inputlist[[iii]]
     coil_out=pop_coil(inputs)
-    errors=c(errors,lossfun(outputs[iii,],coil_out[[1]][,1]))
+    errors=c(errors,lossfun(outputs[iii,][sel],coil_out[[1]][sel,states]))
   }
   errors[is.na(errors)]=1e4
   return(sum(errors))
@@ -152,21 +159,20 @@ initialize_swarm<-function(swarm_size,L=length(avec),locfac=0.6){
     x.p[1,]<-savedweights
   }
   locality<<-locfac*swarm_size
-  outgs<<-apply(x.p,1,function(aa)eval_weights(aa,inputlist,outputs))
+  outgs<<-apply(x.p,1,function(aa)eval_weights(aa,inputlist,outputs,sel=slseq))
   bestgs<<-outgs
   bestp<<-x.p
 }
 
 step_swarm<-function(swarm_size,L=length(avec),w=0.9,g_p=0.4,g_g=0.4){
   
-  outgs<<-apply(x.p,1,function(aa)eval_weights(aa,inputlist,outputs))
+  outgs<<-apply(x.p,1,function(aa)eval_weights(aa,inputlist,outputs,sel=slseq))
   
   n_v=matrix(runif(swarm_size*L,-0.01,0.01),nrow=swarm_size,ncol=L)
   r_p=matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
   r_g=matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
   
   cmat=t(apply(x.p,1,function(z) order(apply(x.p,1,function(y) sum(abs(y-z))))[-1][1:locality]))
-  closest.neighbor=x.p[cmat[,1],]
   
   best_g_mat<<-t(apply(cmat,1,function(a) x.p[a,][which.min(outgs[a]),]))
   
@@ -174,8 +180,7 @@ step_swarm<-function(swarm_size,L=length(avec),w=0.9,g_p=0.4,g_g=0.4){
   bestp[new.ind,]<<-x.p[new.ind,]
   bestgs[new.ind]<<-outgs[new.ind]
   
-  repulse.factor=0
-  vel<<-n_v+w*vel+g_p*r_p*(bestp-x.p)+g_g*r_g*(best_g_mat-x.p)-sweep((x.p-closest.neighbor),2,repulse.factor,"*")
+  vel<<-n_v+w*vel+g_p*r_p*(bestp-x.p)+g_g*r_g*(best_g_mat-x.p)
   
   x.p<<-x.p+vel
   x.p[x.p<(-3)]=-3
@@ -198,7 +203,12 @@ clean[is.na(clean)]=0
 clean$group=lubridate::floor_date(data_buoy$date,"10 day")
 clean<-as.data.frame(clean%>%group_by(group)%>%summarise_all(mean))
 lookback=10
+
 lookforward=30
+slen=30 #How many samples in the lookforward to use?
+slseq=round(seq(1,lookforward,length.out = slen))
+states=1 #How many states to calibrate to?
+
 
 predictors=c("wind_spd","air_temperature")
 objective=c("sea_surface_temperature")
@@ -222,11 +232,11 @@ sub.num=1 #Number of conserved subgroups
 vfara_inert=60#inertia
 vfara_init=100 #initial inertia
 Tlen=lookforward #Steps to run coil
-loadvals=T #Load in previously learned values?
+loadvals=F #Load in previously learned values?
 if (loadvals){
-  savedweights<-readRDS("results/buoy_v9.RdA")
+  savedweights<-readRDS("results/buoy_v14.RdA")
 }
-retrain=F
+retrain=F #Retrain from saved weights?
 
 buildcoil(n.s,sym=sym)
 
@@ -238,7 +248,7 @@ avec<-unlist(weights)
 
 
 #xsamps=sample(1:dim(dfs$objective[[1]])[1],15)
-xsamps=c(3,72,44,100,145)[1:5]
+xsamps=c(3,72,44,100,145)[1]
 
 inputlist=list()
 for (xsel in xsamps){
@@ -255,7 +265,7 @@ outputs<-matrix(dfs$objective[[1]][xsamps,],nrow=length(xsamps))
 if (loadvals&!retrain){
   assign_weights(weights,weightdim,savedweights)
 }else{
-  n.part=10
+  n.part=20
   initialize_swarm(n.part)
   
   Esave=c()
@@ -290,4 +300,3 @@ for (ix in 1:length(xsamps)){
   lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invres,col="red",lwd=2)
   #=lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invobs,col="blue")
 }
-
