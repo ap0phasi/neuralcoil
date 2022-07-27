@@ -429,7 +429,7 @@ model %>%compile(loss=loss_focus,optimizer="adam")
 history<-model%>%fit(
   nn_inputs,
   nn_obj,
-  epochs=300,
+  epochs=1000,
   batch_size=1
 )
 
