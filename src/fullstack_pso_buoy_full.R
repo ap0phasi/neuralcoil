@@ -144,7 +144,7 @@ transform_to_params<-function(avec,inputlist){
   inL<-length(inputlist)
   rot.indx<-1:(inL*3)
   st.indx<-(inL*3+1):length(avec)
-  rots<-matrix(avec[rot.indx],ncol=3)*10
+  rots<-matrix(avec[rot.indx],ncol=3)*100
   stvals<-matrix(avec[st.indx],ncol=2*n.s)/100
   return(list(rots=rots,stvals=stvals))
 }
@@ -184,13 +184,17 @@ initialize_swarm<-function(swarm_size,L=length(avec),locfac=0.6,type="neural"){
     uplim<<-3
   }else{
     eval_fun<-eval_params
-    lowlim<<-(0)
-    uplim<<-(10)
+    lowlim<<-(0.01)
+    uplim<<-(1)
   }
   x.p<<-matrix(runif(swarm_size*L,lowlim/3,uplim/3),nrow=swarm_size,ncol=L)
   vel<<-matrix(runif(swarm_size*L,-0.1,0.1),nrow=swarm_size,ncol=L)
   if (retrain&type=="neural"){
     x.p[1,]<-savedweights
+  }else{
+    innew=avec*100
+    innew[1:3]=innew[1:3]/100/100
+    x.p[1:n.part,]<-t(matrix(rep(avec,n.part),nrow=length(avec)))
   }
   locality<<-locfac*swarm_size
   outgs<<-apply(x.p,1,function(aa)eval_fun(aa,inputlist,outputs,sel=slseq))
@@ -350,7 +354,7 @@ startvals_opt=calparams$startvals
 rotvals_opt=calparams$rots
 RandVec=calparams$RandVec
 
-#Do direct particle swarm optimization for other samples to determine ideal rotation and start vals
+#Do direct particle swarm optimization for other samples to determine ideal rotation and start vals for other samples
 xsampsold=xsamps
 xsamps=c(72,44,100,145)[1:4]
 
@@ -377,7 +381,7 @@ rots<-opt_params$rots
 #Append original trained data
 rots<-rbind(rotvals_opt,rots)
 stvals<-rbind(array(t(matrix(c(Re(startvals_opt),Im(startvals_opt)),ncol=2))),stvals)
-xsamps=c(xsampsold,c(72,44,100,145))
+xsamps=c(xsampsold,c(72,44,100,145)[1:4])
 
 inout<-gen_in_out(dfs,xsamps)
 inputlist<-inout[[1]]
@@ -414,11 +418,18 @@ nn_inputs=sapply(1:length(inputlist[[1]]),function(g) do.call(rbind,lapply(input
 RandMat=t(matrix(rep(array(t(matrix(c(Re(RandVec),Im(RandVec)),ncol=2))),length(xsamps)),ncol=length(xsamps)))
 nn_obj=cbind(rots,stvals,RandMat)
 
-model %>%compile(loss=loss_mean_squared_error,optimizer="adam")
+loss_focus<-function(y_true,y_pred){
+  importance_vector=rep(1,(n.s*2+3))
+  importance_vector[4:(n.s*2+3)]=100000
+  k_mean((y_true[,1:(n.s*2+3)]-y_pred[,1:(n.s*2+3)])^2*importance_vector)
+}
+
+print(paste("Difference:",sum((model%>%predict(nn_inputs))[1,]-nn_obj[1,])))
+model %>%compile(loss=loss_focus,optimizer="adam")
 history<-model%>%fit(
   nn_inputs,
   nn_obj,
-  epochs=1000,
+  epochs=300,
   batch_size=1
 )
 
@@ -444,3 +455,5 @@ for (ix in 1:length(xsamps)){
   lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invres,col="red",lwd=2)
   #=lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invobs,col="blue")
 }
+
+print(paste("Difference:",sum((model%>%predict(nn_inputs))[1,]-nn_obj[1,])))
