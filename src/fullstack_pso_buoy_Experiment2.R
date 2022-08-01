@@ -188,13 +188,14 @@ initialize_swarm<-function(swarm_size,L=length(avec),locfac=0.6,type="neural"){
     uplim<<-(1)
   }
   x.p<<-matrix(runif(swarm_size*L,lowlim/3,uplim/3),nrow=swarm_size,ncol=L)
-  vel<<-matrix(runif(swarm_size*L,-0.1,0.1),nrow=swarm_size,ncol=L)
+  vel<<-matrix(runif(swarm_size*L,-0.01,0.01),nrow=swarm_size,ncol=L)
   if (retrain&type=="neural"){
     x.p[1,]<-savedweights
   }else{
     innew=avec*100
-    innew[1:3]=innew[1:3]/100/100
-    x.p[1:n.part,]<-t(matrix(rep(avec,n.part),nrow=length(avec)))
+    innew[1:(3*length(xsamps))]=innew[1:(3*length(xsamps))]/100/100
+    x.p[1:n.part,]<<-t(matrix(rep(innew,n.part),nrow=length(avec)))
+    vel<<-matrix(runif(swarm_size*L,-0.0001,0.0001),nrow=swarm_size,ncol=L)
   }
   locality<<-locfac*swarm_size
   outgs<<-apply(x.p,1,function(aa)eval_fun(aa,inputlist,outputs,sel=slseq))
@@ -368,10 +369,11 @@ n.part=20
 initialize_swarm(n.part,type="direct")
 
 Esave=c()
-for (itt in 1:100){
+for (itt in 1:10){
   step_swarm(n.part,type="direct")
   Esave=c(Esave,min(bestgs))
   plot(Esave,type="l")
+  #plot(x.p[,c(1,2)])
 }
 
 opt_params<-transform_to_params(bestp[which.min(bestgs),],inputlist)
@@ -393,6 +395,8 @@ for (iii in 1:length(inputlist)){
   inputs=inputlist[[iii]]
   stmat<-(matrix(stvals[iii,],nrow=2))
   startvals<-(complex(n.s,stmat[1,],stmat[2,]))
+  print(rots[iii,])
+  print(startvals)
   coil_out<-(runcoil(RandVec,rots[iii,],startvals))
   
   plot(outputs[iii,],col="blue",type="l")
@@ -411,6 +415,7 @@ for (ix in 1:length(xsamps)){
   lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invres,col="red",lwd=2)
   #=lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invobs,col="blue")
 }
+
 
 #Train Neural Network to produce these outputs
 nn_inputs=sapply(1:length(inputlist[[1]]),function(g) do.call(rbind,lapply(inputlist,function(x)x[[g]])))
