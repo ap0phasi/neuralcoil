@@ -29,7 +29,7 @@ lookwindow<-function(df,lookback,lookforward,predictors,objective){
     listtemp[[paste(ip)]]=ptemp
   }
   lfull[["predictors"]]=listtemp
-  
+
   listtemp<-list()
   for (io in objective){
     ptemp=c()
@@ -50,19 +50,260 @@ scalelist<-function(dfw,predrange=c(0,1),objrange=c(0.2,0.6)){
     dfw$predictors[[idd]]=scaled$scaled
     scalesaves=rbind(scalesaves,scaled$scaler)
   }
-  
+
   for (idd in 1:length(dfw$objective)){
     scaled=scaledata(dfw$objective[[idd]],objrange)
     dfw$objective[[idd]]=scaled$scaled
     scalesaves=rbind(scalesaves,scaled$scaler)
   }
-  
+
   dfw$dummy=matrix(1,nrow=dim(dfw$predictors[[1]])[1],ncol=2)
   return(list(scaledlist=dfw,scalesaves=scalesaves))
 }
 
 #Generate Coil According to User specifications
-source("src/complex_coil_gen.R")
+##############################################################################
+#' Perform Normalization of Complex Values
+#'
+#' This function normalizes an array of complex values to a specific point along
+#' the complex unit circle
+#'
+#' @param comvec complex valued array
+#' @param GoalR real value of objective point along complex unit circle
+#' @param GoalI imaginary value of objective point along complex unit circle
+#' @return normalized complex value array
+#' @export
+normalize <- function(comvec,GoalR,Goali){complex(length(comvec),Re(comvec)/sum(Re(comvec))*GoalR,Im(comvec)/sum(Im(comvec))*Goali)}
+
+##############################################################################
+#' Find Effective Presentation Magnitude for Real-Valued Probability
+#'
+#' This function translates complex-valued probability into real values
+#'
+#' @param valarr complex valued array
+#' @return real-valued lengths
+#' @export
+llen <- function(varlarr){Re(varlarr*Conj(sum(varlarr)))}
+
+##############################################################################
+#' Build Complex Valued Coil
+#'
+#' This function generates a complex valued coil based on user specifications of size
+#' and symmetry
+#'
+#' @param n.s number of presentations
+#' @param sym is the coil symmetrical?
+#' @export
+buildcoil<-function(n.s,sym=FALSE){
+  name.states=letters[1:n.s]#Establish State Names
+  trans.names=apply(expand.grid(name.states,name.states),1,function(x) paste(x,collapse="-"))#Establish Transition Names
+  depS.names=apply(expand.grid(trans.names,name.states),1,function(x) paste(x,collapse="|"))#Transitions Dependent on State
+  depT.names=apply(expand.grid(trans.names,trans.names),1,function(x) paste(x,collapse="|"))#Transitions Dependent on Transitions
+
+  #Build Coil DF
+  CoilVals=data.frame(Name=c(name.states,trans.names,depS.names,depT.names))
+  #Establish Initial values (note: must be mostly between 0 and 1)
+  CoilVals$Value=0
+
+  #Symmetric Groups
+  symmat=t(as.data.frame(lapply(strsplit(CoilVals$Name,"[-]|[|]"),function(x) c(x,rep(NA,length(name.states)-length(x))))))
+  rownames(symmat)=NULL
+  tsymmat=c()
+  for (isy in 1:dim(symmat)[2]){tsymmat=cbind(tsymmat,symmat[,isy]==apply(symmat,1,function(varlarr)name.states[which.max(unlist(lapply(name.states, function(comvec) sum(comvec==varlarr,na.rm=T))))]))}
+  bincode=gsub("NA","",apply(tsymmat,1,function(x) paste(as.numeric(x),collapse="")))
+
+  group.index=list()
+  ibC=1
+  for (ib in unique(bincode)){
+    group.index[[ibC]]=which(bincode==ib)
+    ibC=ibC+1
+  }
+
+  if (sym==FALSE){
+    group.index=as.list(1:length(CoilVals$Name))
+  }
+
+  #Create List of Conserved Groups (Groups that normalize)
+  conserved.group=list()
+  conserved.group[[1]]=name.states
+  iC=2
+  for (iNN in name.states){
+    conserved.group[[iC]]=CoilVals$Name[grep(paste0("^[a-z]-",iNN,"$"),CoilVals$Name)]
+    iC=iC+1
+  }
+
+  Normsaves=c()
+  #Perform Normalization
+  for (iG in conserved.group){
+    #For each conserved group, make sure states or transitions are normalized
+    Normsaves=rbind(Normsaves,match(iG,CoilVals$Name))
+    #Within these conserved groups, look at individual components
+    for (igg in iG){
+      #Find all dependencies on this component
+      tempName=CoilVals$Name[grep(paste0("[|]",igg,"$"),CoilVals$Name)]
+      #Go through state names, all dependencies representing transitions from this state should normalize
+      for (iS in name.states){
+        n.indx=match(tempName[grep(paste0("-",iS,"[|]"),tempName)],CoilVals$Name)
+        Normsaves=rbind(Normsaves,n.indx)
+      }
+    }
+  }
+
+  #Global Assignments
+  Normsaves<<-Normsaves
+  CoilVals<<-CoilVals
+  name.states<<-name.states
+  conserved.group<<-conserved.group
+  group.index<<-group.index
+  trans.names<<-trans.names
+}
+##############################################################################
+#' Find Effective Presentation Magnitude for Prioritization
+#'
+#' This function finds the effective length of presentations for prioritization
+#' during coil dynamics
+#'
+#' @param valarr complex valued array
+#' @return real-valued lengths
+#' @export
+lrad <- function(varlarr){abs(Re(varlarr)+Im(varlarr))}
+
+
+##############################################################################
+#' Simulate Coil Dynamics
+#'
+#' This functions runs the generated coil provided the parameterizations
+#'
+#' @param RandVec complex valued array of coil parameters
+#' @param rotvals three real values giving coil rotations
+#' @param startvals complex valued array giving coil starting values
+#' @return real-valued probability dynamics over time
+#' @return complex-valued coil dynamics
+#' @export
+runcoil=function(RandVec,rotvals,startvals){
+
+  #build symmetric or asymmetric coils
+  for (igc in 1:length(group.index)){
+    CoilVals$Value[group.index[[igc]]]=RandVec[igc]
+  }
+
+  CoilVals$Value[1:n.s]=startvals
+
+  #Apply physics-based controls on coil parameterization
+  if (cont==T){
+    #Force Locality
+    ExG=(expand.grid(c(1:length(name.states)),c(1:length(name.states))))
+    Exgs=ExG[abs(ExG[[1]]-ExG[[2]])>1,]
+
+    #Prevent exchange between subnormals
+
+    #Subnormalization
+    splits=split((1:length(name.states)), ceiling((1:length(name.states))/(length(name.states)/sub.num)))
+
+    subvas=which(diff(ceiling((1:length(name.states))/(length(name.states)/sub.num)))>0)
+    sbins=rbind(cbind(subvas,subvas+1),cbind(subvas+1,subvas))
+    colnames(sbins)=colnames(Exgs)
+
+    if (loc==T){
+      Exgs=rbind(Exgs,sbins) #For Locality
+    }else{
+      Exgs=rbind(as.matrix(expand.grid(splits)),as.matrix(expand.grid(splits)[,sub.num:1])) #No Locality, segmented
+    }
+
+    Pset=split(t(Exgs), rep(1:nrow(Exgs), each = ncol(Exgs)))
+
+    for (ipps in Pset){
+      #Cross Influence, conservative, nonentropic, no impossibles
+      sw.indx=grepl(paste(name.states[ipps[1]],name.states[ipps[2]],sep="[-]"),CoilVals$Name)
+      CoilVals[sw.indx,2]=complex(sum(sw.indx),1e-9,1e-9)
+    }
+
+    #Inertial Values
+    for (iSSa in 1:length(name.states)){
+      sw.indx=grepl(paste0(name.states[iSSa],"[-]",name.states[iSSa],"[|]"),CoilVals$Name)
+      CoilVals$Value[sw.indx]=CoilVals$Value[sw.indx]*vfara_inert
+    }
+
+    #Starting Inertial Values
+    for (iSSa in 1:length(name.states)){
+      sw.indx=grepl(paste0("^",name.states[iSSa],"[-]",name.states[iSSa],"$"),CoilVals$Name)
+      CoilVals$Value[sw.indx]=CoilVals$Value[sw.indx]*vfara_init
+    }
+
+    #Inertial perception
+    etemp=expand.grid(c(1:length(name.states)),c(1:length(name.states)))
+    etemp=etemp[!(etemp[,1]==etemp[,2]),]
+    Exk=split(t(etemp), rep(1:(length(name.states)-1), each = 2))
+    mfac=0
+    for (iske in Exk){
+      Eindx1=grepl(paste0(name.states[iske[1]],"[-]",name.states[iske[2]],"[|]",name.states[iske[2]],"[-]",name.states[iske[1]]),CoilVals$Name)
+      CoilVals$Value[Eindx1]=CoilVals$Value[Eindx1]*mfac
+
+      Eindx2=grepl(paste0(name.states[iske[2]],"[-]",name.states[iske[1]],"[|]",name.states[iske[1]],"[-]",name.states[iske[2]]),CoilVals$Name)
+      CoilVals$Value[Eindx2]=CoilVals$Value[Eindx2]*mfac
+    }
+
+  }
+  #Normalize based off of saved norm groups
+  for (iNo in 1:dim(Normsaves)[1]){
+    if (max(Normsaves[iNo,])<=n.s){
+      GoalR<-Re(exp(rotvals[1]*complex(1,0,1)))
+      Goali<-Im(exp(rotvals[1]*complex(1,0,1)))
+    }else if ((max(Normsaves[iNo,])<=(n.s^2+n.s))&(min(Normsaves[iNo,])>(n.s))){
+      GoalR<-Re(exp(rotvals[2]*complex(1,0,1)))
+      Goali<-Im(exp(rotvals[2]*complex(1,0,1)))
+    }else{
+      GoalR<-Re(exp(rotvals[3]*complex(1,0,1)))
+      Goali<-Im(exp(rotvals[3]*complex(1,0,1)))
+    }
+    CoilVals$Value[Normsaves[iNo,]]=normalize(CoilVals$Value[Normsaves[iNo,]],GoalR,Goali)
+  }
+
+  #Save initial probability matrix
+  Pmat=llen(CoilVals$Value[match(name.states,CoilVals$Name)])
+  complex_states=CoilVals$Value[match(name.states,CoilVals$Name)]
+  for (iT in 1:(Tlen-1)){
+
+    #We need to select our predictive group. Find maximum state:
+    max.state=name.states[which.max(lrad(CoilVals$Value[match(name.states,CoilVals$Name)]))]
+    min.state=name.states[which.min(lrad(CoilVals$Value[match(name.states,CoilVals$Name)]))]
+
+    #Now look at the predictions for transition of max state to min state according to different groups
+    preds=c()
+    for (iG in conserved.group){
+      g.tran=paste(paste0(min.state,"-",max.state),iG,sep="|")
+      preds=c(preds,sum(CoilVals$Value[match(g.tran,CoilVals$Name)]*CoilVals$Value[match(iG,CoilVals$Name)]))
+    }
+
+    #Pick whichever maximizes
+    group.sel=which.max(lrad(preds))
+    if (length(group.sel)==0){group.sel=1}
+
+    sel.v=paste0("[|]",conserved.group[[group.sel]],"$")
+    TMat=c()
+    for (iS in sel.v){
+      TMat=cbind(TMat,CoilVals[grep(iS,CoilVals$Name),]$Value)
+    }
+
+    #Create transition matrix values based on selected predictive group
+    CoilVals$Value[match(trans.names,CoilVals$Name)]=TMat%*%CoilVals$Value[match(conserved.group[[group.sel]],CoilVals$Name)]
+
+    SMat=c()
+    for (iS in name.states){
+      SMat=cbind(SMat,CoilVals[grep(paste0("^[a-z]-",iS,"$"),CoilVals$Name),]$Value)
+    }
+    SMat=apply(SMat,2,function(comvec)comvec/sum(llen(comvec))) #To handle leaks due to rounding?
+
+    #Produce new probabilities
+    CoilVals$Value[match(name.states,CoilVals$Name)]=SMat%*%CoilVals$Value[match(name.states,CoilVals$Name)]
+
+    #Convert complex values to real
+    Pmat=rbind(Pmat,llen(CoilVals$Value[match(name.states,CoilVals$Name)]))
+    complex_states=rbind(complex_states,CoilVals$Value[match(name.states,CoilVals$Name)])
+  }
+  return(list(Pmat,complex_states))
+}
+
 
 layer_activation_seagull<-function(x,alpha,decay=1e3){
   k_minimum(1,k_abs(layer_activation_leaky_relu(x,alpha)/decay))
@@ -81,19 +322,19 @@ autogen_cnn<-function(dfs,n.s,params){
   merge<-layer_concatenate(cnnl)%>%
     layer_dense(units=32,activation="relu")%>%
     layer_dense(units=16,activation="relu")
-  
+
   #rots<-merge%>%layer_dense(units=3)%>%layer_activation_seagull(0.1,decay=100)
   rots<-merge%>%layer_dense(units=3,activation="linear")
-  
+
   starts<-merge%>%layer_dense(units=n.s*2)%>%layer_activation_seagull(0.1)
-  
+
   visl[[ipp+1]]<-layer_input(shape=c(dim(dfs$dummy)[2]))
   dumw<-visl[[ipp+1]]%>%layer_dense(units=params*2)%>%layer_activation_seagull(0.1)
-  
+
   output <- layer_concatenate(list(rots,starts,dumw))
-  
+
   model<-keras_model(visl,output)
-  
+
   return(model)
 }
 
@@ -209,21 +450,21 @@ step_swarm<-function(swarm_size,L=length(avec),w=0.9,g_p=0.4,g_g=0.4,type="neura
     eval_fun<-eval_params
   }
   outgs<<-apply(x.p,1,function(aa)eval_fun(aa,inputlist,outputs,sel=slseq))
-  
+
   n_v=matrix(runif(swarm_size*L,-0.01,0.01),nrow=swarm_size,ncol=L)
   r_p=matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
   r_g=matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
-  
+
   cmat=t(apply(x.p,1,function(z) order(apply(x.p,1,function(y) sum(abs(y-z))))[-1][1:locality]))
-  
+
   best_g_mat<<-t(apply(cmat,1,function(a) x.p[a,][which.min(outgs[a]),]))
-  
+
   new.ind=which(outgs<bestgs)
   bestp[new.ind,]<<-x.p[new.ind,]
   bestgs[new.ind]<<-outgs[new.ind]
-  
+
   vel<<-n_v+w*vel+g_p*r_p*(bestp-x.p)+g_g*r_g*(best_g_mat-x.p)
-  
+
   x.p<<-x.p+vel
   x.p[x.p<(lowlim)]=lowlim
   x.p[x.p>uplim]=uplim
@@ -240,7 +481,7 @@ gen_in_out<-function(dfs,xsamps){
     inputs[[iaa+1]]=t(as.matrix(dfs$dummy[xsel,],ncol=length(xsel)))
     inputlist[[paste(xsel)]]=inputs
   }
-  
+
   outputs<-matrix(dfs$objective[[1]][xsamps,],nrow=length(xsamps))
   return(list(inputlist,outputs))
 }
@@ -315,14 +556,14 @@ if (loadvals&!retrain){
 }else{
   n.part=20
   initialize_swarm(n.part)
-  
+
   Esave=c()
   for (itt in 1:100){
     step_swarm(n.part)
     Esave=c(Esave,min(bestgs))
     plot(Esave,type="l")
   }
-  
+
   assign_weights(weights,weightdim,bestp[which.min(bestgs),])
 }
 
@@ -331,12 +572,12 @@ par(mfrow=c(length(inputlist),1),mar=c(0,4,0,0))
 for (iii in 1:length(inputlist)){
   inputs=inputlist[[iii]]
   coil_out=pop_coil(inputs,readout = T)
-  
+
   plot(outputs[iii,],col="blue",type="l")
   print(coil_out[[1]][1,1])
   matlines(coil_out[[1]],col="grey")
   lines(coil_out[[1]][,1],col="red")
-  
+
   outsave=rbind(outsave,coil_out[[1]][,1])
 }
 par(mfrow=c(1,1),mar=c(4,4,4,4))
@@ -387,7 +628,7 @@ xsamps=c(xsampsold,c(72,44,100,145)[1:2])
 inout<-gen_in_out(dfs,xsamps)
 inputlist<-inout[[1]]
 outputs<-inout[[2]]
- 
+
 outsave=c()
 par(mfrow=c(length(inputlist),1),mar=c(0,4,0,0))
 for (iii in 1:length(inputlist)){
@@ -397,12 +638,12 @@ for (iii in 1:length(inputlist)){
   print(rots[iii,])
   print(startvals)
   coil_out<-(runcoil(RandVec,rots[iii,],startvals))
-  
+
   plot(outputs[iii,],col="blue",type="l")
   print(coil_out[[1]][1,1])
   matlines(coil_out[[1]],col="grey")
   lines(coil_out[[1]][,1],col="red")
-  
+
   outsave=rbind(outsave,coil_out[[1]][,1])
 }
 par(mfrow=c(1,1),mar=c(4,4,4,4))
@@ -442,12 +683,12 @@ par(mfrow=c(length(inputlist),1),mar=c(0,4,0,0))
 for (iii in 1:length(inputlist)){
   inputs=inputlist[[iii]]
   coil_out=pop_coil(inputs,readout = T)
-  
+
   plot(outputs[iii,],col="blue",type="l")
   print(coil_out[[1]][1,1])
   matlines(coil_out[[1]],col="grey")
   lines(coil_out[[1]][,1],col="red")
-  
+
   outsave=rbind(outsave,coil_out[[1]][,1])
 }
 par(mfrow=c(1,1),mar=c(4,4,4,4))
