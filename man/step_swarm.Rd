@@ -24,7 +24,11 @@ step_swarm(
 
 \item{g_g}{local pull factor}
 
-\item{type}{is this for neural network or direct optimization?}
+\item{type}{what type of optimization is the swarm used for?
+\itemize{
+\item{"neural"}{ Optimize weights of convolutional neural network to predict rotation, start values, and coil parameterizations from inputs}
+\item{"direct"}{ Optimize unique rotations and start values for multiple outputs using the same coil parameterization}
+}}
 
 \item{loc_fac}{locality factor}
 }

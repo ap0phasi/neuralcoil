@@ -19,9 +19,9 @@ clean<-as.data.frame(clean%>%group_by(group)%>%summarise_all(mean))
 lookback=10
 
 lookforward=30
-slen=15 #How many samples in the lookforward to use?
+slen=30 #How many samples in the lookforward to use?
 slseq=round(seq(1,lookforward,length.out = slen))
-states=1 #How many states to calibrate to?
+states=1 #Which states to calibrate to?
 
 
 predictors=c("wind_spd","air_temperature")
@@ -46,9 +46,9 @@ sub.num=1 #Number of conserved subgroups
 vfara_inert=60#inertia
 vfara_init=100 #initial inertia
 Tlen=lookforward #Steps to run coil
-loadvals=F #Load in previously learned values?
+loadvals=T #Load in previously learned values?
 if (loadvals){
-  savedweights<-readRDS("results/buoy_single.RdA")
+  savedweights<-readRDS("results/buoy_single4.RdA")
 }
 retrain=F #Retrain from saved weights?
 
@@ -83,6 +83,8 @@ if (loadvals&!retrain){
 
   assign_weights(weights,weightdim,bestp[which.min(bestgs),])
 }
+
+#saveRDS(file="results/buoy_single4.RdA",unlist(get_weights(model)))
 
 outsave=c()
 par(mfrow=c(length(inputlist),1),mar=c(0,4,0,0))

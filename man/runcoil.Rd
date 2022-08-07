@@ -4,7 +4,7 @@
 \alias{runcoil}
 \title{Simulate Coil Dynamics}
 \usage{
-runcoil(RandVec, rotvals, startvals)
+runcoil(RandVec, rotvals, startvals, prival = NULL)
 }
 \arguments{
 \item{RandVec}{complex valued array of coil parameters}
@@ -12,6 +12,8 @@ runcoil(RandVec, rotvals, startvals)
 \item{rotvals}{three real values giving coil rotations}
 
 \item{startvals}{complex valued array giving coil starting values}
+
+\item{prival}{what prioritization function to use?}
 }
 \value{
 real-valued probability dynamics over time

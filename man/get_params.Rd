@@ -4,7 +4,7 @@
 \alias{get_params}
 \title{Evaluate Neural Network to Get Coil Parameters}
 \usage{
-get_params(input, model = model)
+get_params(input)
 }
 \arguments{
 \item{input}{input values for neural network}

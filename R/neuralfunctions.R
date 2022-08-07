@@ -312,14 +312,18 @@ eval_weights<-function(avec,inputlist,outputs,sel=seq(1,lookforward)){
 #' @param swarm_size number of particles in swarm
 #' @param L number of dimensions needed for swarm
 #' @param loc_fac locality factor
-#' @param type is this for neural network or direct optimization?
+#' @param type what type of optimization is the swarm used for?
+##' \itemize{
+##'  \item{"neural"}{ Optimize weights of convolutional neural network to predict rotation, start values, and coil parameterizations from inputs}
+##'  \item{"direct"}{ Optimize unique rotations and start values for multiple outputs using the same coil parameterization}
+##' }
 #' @export
 initialize_swarm<-function(swarm_size,L=length(avec),locfac=0.6,type="neural"){
   if (type=="neural"){
     eval_fun<-eval_weights
     lowlim<<-(-3)
     uplim<<-3
-  }else{
+  }else if (type=="direct"){
     eval_fun<-eval_params
     lowlim<<-(0.01)
     uplim<<-(1)
@@ -328,7 +332,7 @@ initialize_swarm<-function(swarm_size,L=length(avec),locfac=0.6,type="neural"){
   vel<<-matrix(runif(swarm_size*L,-0.01,0.01),nrow=swarm_size,ncol=L)
   if (retrain&type=="neural"){
     x.p[1,]<-savedweights
-  }else{
+  }else if (type=="direct"){
     innew=avec*100
     innew[1:(3*length(xsamps))]=innew[1:(3*length(xsamps))]/100/100
     x.p[1,]<<-innew
@@ -351,12 +355,16 @@ initialize_swarm<-function(swarm_size,L=length(avec),locfac=0.6,type="neural"){
 #' @param g_p global pull factor
 #' @param g_g local pull factor
 #' @param loc_fac locality factor
-#' @param type is this for neural network or direct optimization?
+#' @param type what type of optimization is the swarm used for?
+##' \itemize{
+##'  \item{"neural"}{ Optimize weights of convolutional neural network to predict rotation, start values, and coil parameterizations from inputs}
+##'  \item{"direct"}{ Optimize unique rotations and start values for multiple outputs using the same coil parameterization}
+##' }
 #' @export
 step_swarm<-function(swarm_size,L=length(avec),w=0.9,g_p=0.4,g_g=0.4,type="neural"){
   if (type=="neural"){
     eval_fun<-eval_weights
-  }else{
+  }else if (type=="direct"){
     eval_fun<-eval_params
   }
   outgs<<-apply(x.p,1,function(aa)eval_fun(aa,inputlist,outputs,sel=slseq))
@@ -379,6 +387,8 @@ step_swarm<-function(swarm_size,L=length(avec),w=0.9,g_p=0.4,g_g=0.4,type="neura
   x.p[x.p<(lowlim)]=lowlim
   x.p[x.p>uplim]=uplim
   x.p<<-x.p
+  bestp<<-bestp
+  bestgs<<-bestgs
 }
 
 ##############################################################################
@@ -404,4 +414,116 @@ gen_in_out<-function(dfs,xsamps){
 
   outputs<-matrix(dfs$objective[[1]][xsamps,],nrow=length(xsamps))
   return(list(inputlist,outputs))
+}
+
+##############################################################################
+#' Populate and Run Coil for Rotations, Start Values, and Coil Parameters
+#'
+#' This is a function to populate and run a coil provided the rotations, start values, and coil parameters
+#'
+#' @param avec array of rotation, start values, and coil parameters
+#' @return coil result
+#' @export
+pop_coil_full<-function(avec){
+  rdim=dim(CoilVals)[1]
+  RandVec=complex(rdim,avec[1:(rdim)],avec[(rdim+1):(rdim*2)])
+  rotvals=avec[(rdim*2+1):(rdim*2+3)]*100
+  stmat=matrix(avec[(rdim*2+4):length(avec)],nrow=2)
+  startvals=complex(n.s,stmat[1,],stmat[2,])
+  runcoil(RandVec,rotvals,startvals)
+}
+
+##############################################################################
+#' Initialize Particle Swarm for Full Coil Solution
+#'
+#' This is a function to initialize a particle swarm to determine coil rotations, starts, and parameters
+#'
+#' @param swarm_size number of particles in swarm
+#' @param L number of dimensions needed for swarm
+#' @param loc_fac locality factor
+#' @param type what type of optimization is the swarm used for?
+#' @param setrots use fixed rotation values?
+#' @export
+initialize_swarm_full<-function(swarm_size,L,locfac=0.6,setrots=NULL){
+  eval_fun<-eval_params
+  lowlim<<-(0)
+
+  x.p<<-matrix(runif(swarm_size*L,lowlim,1),nrow=swarm_size,ncol=L)
+  vel<<-matrix(runif(swarm_size*L,-0.1,0.1),nrow=swarm_size,ncol=L)
+  if (!is.null(setrots)){
+    rdim=dim(CoilVals)[1]
+    rot.indx<-((rdim*2+1):(rdim*2+3))
+    x.p[,rot.indx]<<-t(matrix(setrots,ncol=dim(x.p)[1],nrow=3))
+  }
+
+  locality<<-locfac*swarm_size
+
+  solvedcoil=apply(x.p,1,function(x)pop_coil_full(x)[[1]])
+
+  outmat<<-t(solvedcoil)
+  best_p_res<<-outmat
+  x.p<<-x.p
+  best_p<<-x.p
+}
+
+
+##############################################################################
+#' Step through Particle Swarm for Full Coil Solution
+#'
+#' This is a function to step through a particle swarm to determine coil rotations,
+#' starts, and parameters
+#'
+#' @param swarm_size number of particles in swarm
+#' @param L number of dimensions needed for swarm
+#' @param w momentum factor
+#' @param g_p global pull factor
+#' @param g_g local pull factor
+#' @param setrots use fixed rotation values?
+#' @export
+step_swarm_full<-function(swarm_size,L,w=0.9,g_p=0.4,g_g=0.4,setrots=NULL){
+  old_perf=apply(outmat,1,function(x)optf(x,out_goal,slseq))
+  print(min(old_perf))
+  solvedcoil=apply(x.p,1,function(x)pop_coil_full(x)[[1]])
+
+  outmat<<-t(solvedcoil)
+  outmat[is.na(outmat)]<<-0
+  outmat[abs(outmat)==Inf]<<-0
+
+  n_v=matrix(runif(swarm_size*L,-0.01,0.01),nrow=swarm_size,ncol=L)
+  r_p=matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
+  r_g=matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
+
+  cmat=t(apply(x.p,1,function(z) order(apply(x.p,1,function(y) sum(abs(y-z))))[-1][1:locality]))
+
+  best_g_mat<<-t(apply(cmat,1,function(a) x.p[a,][which.min(apply(outmat[a,],1,function(x)optf(x,out_goal,slseq))),]))
+
+  new.ind=which(apply(outmat,1,function(x)optf(x,out_goal,slseq))<apply(best_p_res,1,function(x)optf(x,out_goal,slseq)))
+
+  best_p[new.ind,]<<-x.p[new.ind,]
+  best_p_res[new.ind,]<<-outmat[new.ind,]
+
+  vel<<-n_v+w*vel+g_p*r_p*(best_p-x.p)+g_g*r_g*(best_g_mat-x.p)
+
+  x.p<<-x.p+vel
+  x.p[x.p<(lowlim)]<<-lowlim
+  if (!is.null(setrots)){
+    rdim=dim(CoilVals)[1]
+    rot.indx<-((rdim*2+1):(rdim*2+3))
+    x.p[,rot.indx]<<-t(matrix(setrots,ncol=dim(x.p)[1],nrow=3))
+  }
+  x.p<<-x.p
+  best_p<<-best_p
+  best_p_res<<-best_p_res
+}
+
+##############################################################################
+#' Fitness Function for Full Coil Solution
+#'
+#' This is a function to evaluate the particle swarm for a full coil solution
+#' @param outs modeled values
+#' @param out_goal objective values
+#' @param slseq objective points selection
+#' @export
+optf<-function(outs,out_goal,slseq){
+  mean(abs(outs[slseq]-out_goal[slseq]))
 }

@@ -4,7 +4,7 @@
 \alias{assign_weights}
 \title{Assign Neural Networks Weights from Array}
 \usage{
-assign_weights(weights, weightdim, avec, model = model)
+assign_weights(weights, weightdim, avec)
 }
 \arguments{
 \item{weights}{neural network weights in list structure}

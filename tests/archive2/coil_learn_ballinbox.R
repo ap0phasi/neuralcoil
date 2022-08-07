@@ -2,11 +2,11 @@
 
 rm(list=ls())
 
-#Generate Coil According to User specifications
-source("src/complex_coil_gen.R")
+library(neuralcoil)
 
 #Load in Ball-in-Box data:
-rawdat=t(readRDS("data/BallinBox.RdA"))
+data("exampledata_ballinbox")
+rawdat<-exampledata_ballinbox
 out_goal=as.numeric(rawdat)
 
 #User Selections----
@@ -74,49 +74,49 @@ for (iMPSO in 1:1000){
   }else{
     upL=1:length(out_goal)
   }
-  
+
   old_perf=apply(outmat,1,optf)
-  
+
   print(min(old_perf))
-  
-  
+
+
   solvedcoil=apply(x.p,1,pop_coil)
-  
+
   outmat=t(solvedcoil)
   outmat[is.na(outmat)]=0
   outmat[abs(outmat)==Inf]=0
   outvar=apply(outmat,2,var)
   outmean=apply(outmat,2,mean)
-  
 
-  
+
+
   repulse.factor=0
-  
+
   if (sum(repulse.factor)>0){
-    
+
     repulse.factor=repulse.factor/sum(repulse.factor)*(het.loss)*(1+2*w)*1e4/n/dim(x.p)[2]
   }
-  
+
   n_v=matrix(runif(n*L,-0.01,0.01),nrow=n,ncol=L)
   r_p=matrix(runif(n*L,0,1),nrow=n,ncol=L)
   r_g=matrix(runif(n*L,0,1),nrow=n,ncol=L)
-  
+
   cmat=t(apply(x.p,1,function(z) order(apply(x.p,1,function(y) sum(abs(y-z))))[-1][1:locality]))
-  
+
   closest.neighbor=x.p[cmat[,1],]
-  
+
   best_g_mat=t(apply(cmat,1,function(a) x.p[a,][which.min(apply(outmat[a,],1,optf)),]))
   new.ind=which(apply(outmat,1,optf)<apply(best_p_res,1,optf))
-  
+
   best_p[new.ind,]=x.p[new.ind,]
   best_p_res[new.ind,]=outmat[new.ind,]
-  
+
   vel=n_v+w*vel+g_p*r_p*(best_p-x.p)+g_g*r_g*(best_g_mat-x.p)-sweep((x.p-closest.neighbor),2,repulse.factor,"*")
 
   x.p=x.p+vel
   x.p[(x.p)<0]=0
 
-  
+
   matplot(t(outmat),col="grey",lty=1,type="l")
   lines(out_goal,col="blue")
 
