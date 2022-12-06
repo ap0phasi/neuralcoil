@@ -1,0 +1,161 @@
+---
+title: "introduction"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{introduction}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(neuralcoil)
+library(gifski)
+library(kableExtra)
+```
+
+# Demonstration and Application of Probablistic Coils
+
+This vignette will demonstrate some of the properties of probablistic coils as well as explore potential applications. For an overview of the motivation, theory, and derivation of coils please see <insert_link>
+
+
+Probablistic Coils are systems of interacting, conserved, nonreal-valued Bayesian fields, where the dynamics of the Bayesian fields are self-referencing. We can use the functions provided in this package to randomly generate a coil and simulate the probabilistic field over a number of timesteps. 
+
+## Random Generation of Coils
+
+We will first build a coil by specifying the number of discrete system substates and using the buildcoil function
+
+```{r}
+n.s=4
+buildcoil(n.s,sym=F)
+```
+
+Building the coil creates a number of global variables, including CoilVals, which tells us what probabilistic transition values will be required to simulate the coil.
+```{r,include=F}
+CoilVals %>% kable %>% kable_styling("striped", full_width = F) %>%scroll_box(height='250px')
+```
+
+Additionally, buildcoils generates a group.index variable that tells which of our entries in CoilVals need to be the same value. When we set sym to False we will find there is only one coil value per group, where when symmetry is turned on groups are assigned based on the conserved parameter set. 
+
+To simulate the coil we need to parameterize the coil with rotation values, start values, and probabilistic transition values. Note that as coils are complex-valued, the start and transition values must be complex. 
+```{r}
+rotvals=runif(3,0,1000)
+startvals=complex(length(n.s),runif(n.s,0,1),runif(n.s,0,1))
+RandVec=complex(length(group.index),runif(length(group.index),0,1),runif(length(group.index),0,1))
+Tlen=30
+cont=F
+
+coil_out=runcoil(RandVec = RandVec,rotvals = rotvals,startvals=startvals)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+```
+
+runcoil produces two outputs - the simulated discrete-state probability dynamics over time and the complex coil values over time. Let's visualize them below
+
+```{r,fig.width=10,fig.height=5}
+P.df<-as.data.frame(Pmat)
+colnames(P.df)=gsub("V","S",colnames(P.df))
+#Plots
+layout(matrix(1:3,ncol=3), width = c(2,2,1),height = c(1,1,1))
+#Plot Probability Evolution
+matplot(P.df,type="l",lwd=2,xlab = "Time",ylab="Probability",main="State Probability Dynamics")
+legend("topright", colnames(P.df),col=seq_len(dim(P.df)[2]),cex=0.8,fill=seq_len(dim(P.df)[2]))
+
+#Plot Complex State Values
+g.count <- Tlen
+g.ramp <- gray.colors(g.count, start = 1, end = 0)
+plot(complex(1,0,0),xlab="Real",ylab="Complex",main="Coil Values")
+for (it in 1:Tlen){
+  cums=t(apply(complex_states,1,cumsum))
+  points(cums[it,],col=g.ramp[it])
+  lines(cums[it,],col=g.ramp[it])
+}
+
+par(mar=c(4,0,3,3))
+legend_image <- as.raster(matrix(rev(g.ramp), ncol=1))
+plot(c(0,2),c(0,Tlen),type = 'n', axes = F,xlab = '', ylab = '', main = 'Time')
+text(x=1.5, y = seq(0,Tlen,l=5), labels = seq(0,Tlen,l=5))
+rasterImage(legend_image, 0, 0, 1,Tlen)
+
+par(mfrow=c(1,1))
+```
+The left plot shows the coil state probability dynamics over time, and the right plot shows the coil values for each of our states, arranged tip to tail, color graded through the simulation time. 
+
+Here there are few key properties of coils that should be noted. While the probability dyanmics may appear highly irregular, but the dynamics of coils are completely deterministic. We can also note that the deterministic dynamics of coils are conserved over time, with the sum of probabilities across all system substates always equaling 1:
+
+```{r,fig.width=10,fig.height=5}
+plot(rowSums(Pmat),xlab="Time",ylab="Sum of Probability of Coil Substates",ylim=c(0.990,1.010))
+```
+
+This probability is produced directly by runcoil for convenience, but the probability values come directly from the dynamic complex coil values in the following manner:
+
+```{r}
+Pmat_check = t(apply(complex_states, 1 , function(x) Re(x*Conj(sum(x)))))
+```
+
+When visualizing the complex coil values, we can see that conservation is maintained if the complex coil values for each state at a given time add up to equal some point along the complex unit circle. 
+
+## Physically-Informed Control of Coils
+
+We can further explore coil dynamics by imposing physically informed constraints. For example, if we have 4 system states, we can assume locality by assuming state 1 can only directly transfer probability between state 2, state 2 can only transfer between 1 and 3, state 3 can only transfer between 2 and 4, etc. Additionally, we can force the probability of staying in a given coil state to be higher, emulating an inertial effect.
+
+```{r,fig.width=10,fig.height=5}
+sym=F   #Parameter Symmetry
+loc=T #Locality
+cont=T #Parameter Physicality Controls
+sub.num=1 #Number of conserved subgroups
+vfara_inert=10 #inertia
+vfara_init=1 #initial inertia
+
+coil_out=runcoil(RandVec = RandVec,rotvals = rotvals,startvals=startvals)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+
+P.df<-as.data.frame(Pmat)
+colnames(P.df)=gsub("V","S",colnames(P.df))
+#Plots
+layout(matrix(1:3,ncol=3), width = c(2,2,1),height = c(1,1,1))
+#Plot Probability Evolution
+matplot(P.df,type="l",lwd=2,xlab = "Time",ylab="Probability",main="State Probability Dynamics")
+legend("topright", colnames(P.df),col=seq_len(dim(P.df)[2]),cex=0.8,fill=seq_len(dim(P.df)[2]))
+
+#Plot Complex State Values
+g.count <- Tlen
+g.ramp <- gray.colors(g.count, start = 1, end = 0)
+plot(complex(1,0,0),xlab="Real",ylab="Complex",main="Coil Values")
+for (it in 1:Tlen){
+  cums=t(apply(complex_states,1,cumsum))
+  points(cums[it,],col=g.ramp[it])
+  lines(cums[it,],col=g.ramp[it])
+}
+
+par(mar=c(4,0,3,3))
+legend_image <- as.raster(matrix(rev(g.ramp), ncol=1))
+plot(c(0,2),c(0,Tlen),type = 'n', axes = F,xlab = '', ylab = '', main = 'Time')
+text(x=1.5, y = seq(0,Tlen,l=5), labels = seq(0,Tlen,l=5))
+rasterImage(legend_image, 0, 0, 1,Tlen)
+
+par(mfrow=c(1,1))
+```
+
+We can also animate the Real and Imaginary components of the complex coil values
+```{r, animation.hook="gifski",fig.width=10,fig.height=5}
+ylims=c(min(Re(complex_states),Im(complex_states)),max(Re(complex_states),Im(complex_states)))
+ylims[2]=ylims[2]+0.1
+
+for (itt in 1:Tlen){
+  barplot(Pmat[itt,],space=0,ylab="Value",xlab="State",ylim=ylims,)
+  lines(seq(0.5,length(complex_states[itt,])-0.5,1),Im(complex_states[itt,]),col="blue",lwd=2)
+  lines(seq(0.5,length(complex_states[itt,])-0.5,1),Re(complex_states[itt,]),col="red",lwd=2)
+  legend("topright",col=c("red","blue"),c("Real","Imaginary"),lty=1,lwd=2)
+}
+
+
+```
+

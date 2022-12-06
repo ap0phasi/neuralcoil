@@ -187,13 +187,15 @@ loss_focus<-function(y_true,y_pred){
   importance_vector[4:(n.s*2+3)]=100000
   k_mean((y_true[,1:(n.s*2+3)]-y_pred[,1:(n.s*2+3)])^2*importance_vector)
 }
+#model<-autogen_cnn(dfs,n.s,dim(CoilVals)[1])
+nn_obj[,1:3]=apply(nn_obj[,1:3],2,function(x)x-floor(x/2/pi)*2*pi)
 
 print(paste("Difference:",sum((model%>%predict(nn_inputs))[1,]-nn_obj[1,])))
 model %>%compile(loss=loss_focus,optimizer="adam")
 history<-model%>%fit(
   nn_inputs,
   nn_obj,
-  epochs=1000,
+  epochs=800,
   batch_size=1
 )
 
@@ -221,18 +223,3 @@ for (ix in 1:length(xsamps)){
 }
 
 print(paste("Difference:",sum((model%>%predict(nn_inputs))[1,]-nn_obj[1,])))
-print(paste("Difference 2:",sum((model%>%predict(nn_inputs))[1,1:13]-nn_obj[1,1:13])))
-
-# #Checks
-# nn_out=(model%>%predict(nn_inputs))
-# stmat=matrix(nn_obj[1,4:11],nrow=2)
-# startvals<-(complex(n.s,stmat[1,],stmat[2,]))
-# Rmat=matrix(nn_obj[1,12:dim(nn_obj)[2]],nrow=2)
-# rvecnew=complex(length(RandVec),Rmat[1,],Rmat[2,])
-# plot(runcoil(rvecnew,nn_obj[1,1:3],startvals)[[1]][,1])
-# lines(runcoil(RandVec,nn_obj[1,1:3],startvals)[[1]][,1])
-# stmat=matrix(nn_out[1,4:11],nrow=2)
-# startvals<-(complex(n.s,stmat[1,],stmat[2,]))
-# Rmat=matrix(nn_out[1,12:dim(nn_out)[2]],nrow=2)
-# rvecnew=complex(length(RandVec),Rmat[1,],Rmat[2,])
-# lines(runcoil(rvecnew,nn_out[1,1:3],startvals)[[1]][,1],col="blue")

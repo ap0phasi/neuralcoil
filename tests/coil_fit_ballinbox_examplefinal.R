@@ -39,6 +39,7 @@ for (itt in 1:1000){
   }else{
     slseq=1:length(out_goal)
   }
+  #slseq=1:length(out_goal)
 
   step_swarm_full(n.part,L,setrots=c(2,5,5))
   matplot(t(outmat),col="grey",lty=1,type="l")
@@ -50,8 +51,25 @@ Pmat=pop_coil_full(best_p[which.min(apply(best_p_res,1,function(x)optf(x,out_goa
 matplot(pop_coil_full(best_p[which.min(apply(best_p_res,1,function(x)optf(x,out_goal,slseq))),])[[1]],pch=1,type="l",xlim=c(0,(Tlen)),lwd=2,ylim=c(0,1),xlab="Time",ylab="P(s)")
 #matplot(pop_coil_full(x.p[which.min(apply(outmat,1,function(x)optf(x,out_goal,slseq))),])[[1]],pch=1,type="l",xlim=c(0,(Tlen)),lwd=2,ylim=c(0,1),xlab="Time",ylab="P(s)")
 matlines(exampledata_ballinbox,pch=1,type="l",xlim=c(0,(Tlen)),xlab="Time",ylab="P(s)")
-aa=readRDS("results/ballinbox_weights2.RdA")
+aa=readRDS("results/ballinbox_weights3.RdA")
 rdim=dim(CoilVals)[1]
 aa[(rdim*2+1):(rdim*2+3)]=c(2,5,5)
 matplot(pop_coil_full(aa)[[1]],pch=1,type="l",xlim=c(0,(Tlen)),lwd=2,ylim=c(0,1),xlab="Time",ylab="P(s)")
 matlines(exampledata_ballinbox,pch=1,type="l",xlim=c(0,(Tlen)),xlab="Time",ylab="P(s)")
+
+#Demonstrate Chaos
+# bb=aa
+# bb[(rdim*2+1):(rdim*2+3)]=c(2,5.00001,5)
+# matplot(pop_coil_full(bb)[[1]],pch=1,type="l",xlim=c(0,(Tlen)),lwd=2,ylim=c(0,1),xlab="Time",ylab="P(s)")
+# matlines(exampledata_ballinbox,pch=1,type="l",xlim=c(0,(Tlen)),xlab="Time",ylab="P(s)")
+
+par(mfrow = c(2, 2))
+for (iP in 1:dim(Pmat)[2]){
+
+  plot(exampledata_ballinbox[,iP],type="l")
+  lines(Pmat[,iP],lty=2)
+}
+
+par(mfrow = c(1,1))
+
+#saveRDS(file="results/ballinbox_weights4.RdA",best_p[which.min(apply(best_p_res,1,function(x)optf(x,out_goal,slseq))),])
