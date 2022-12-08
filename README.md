@@ -2,12 +2,19 @@
 > This is a set of scripts for generating and experimenting with probabilistic coils
 
 ## Table of Contents
+* [Installation](#install)
 * [General Info](#general-information)
 * [Coil Behaviors](#coil-behaviors)
 * [Physically-Based Control](#physically-based-control)
 * [Pseudo Neural Network Parameterization](#pseudo-neural-network-parameterization)
 * [Usage](#usage)
 <!-- * [License](#license) -->
+
+##Installation
+```
+library(devtools)
+install_github("ap0phasi/neuralcoil")
+```
 
 ## General Information
 Probabilistic coils are systems of interacting, conserved, nonreal-valued Bayesian fields where the conditionals
@@ -37,14 +44,9 @@ Locality constraints can also be used to sever coils, resulting in separate inte
 Parameter symmetry can be used to formulate coils with identical parameterizations.
 
 
-## Pseudo Neural Network Parameterization
-With the nested conditionals of coils, many parameters are required. To make these parameters functions of 
-static feature distributions, something resembling a complex valued neural network is generated
-where the first weight layer is the feature distributions. The first input layer and subsequent weights
-are treated as parameters. 
+## Neural Network Parameterization
+This package demonstrates how neural networks can be used to parameterize coils to generate dynamic fields with desired behavior.
 
 
 ## Usage
-To generate a coil with random neural network parameterization in RStudio, simply
-
-`source("src/coil_run.R")`
+Please refer to the vignette for usage and examples. 

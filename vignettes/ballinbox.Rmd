@@ -1,0 +1,138 @@
+---
+title: "Coil Training for Ball-in-Box"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Coil Training for Ball-in-Box}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(neuralcoil)
+```
+
+# Parameterizing Coils to Represent Practical Systems
+
+In this vignette we will explore how coils can be trained to emulate conservative probabilistic systems. For this example let us consider a ball bouncing in a 1 dimensional box, where the original position and velocity of the ball are uncertain. If we partition the box into 4 segments, we can simulate many different instances of the ball bouncing in the box to develop a time-evolving discrete probability distribution of the ball's position.
+
+
+```{r}
+#Load in Ball-in-Box data:
+data("exampledata_ballinbox")
+out_goal=as.numeric(exampledata_ballinbox)
+
+
+matplot(exampledata_ballinbox,type="l",lwd=2,xlab = "Time",ylab="Probability",main="State Probability Dynamics")
+legend("topright", colnames(P.df),col=seq_len(dim(P.df)[2]),cex=0.8,fill=seq_len(dim(P.df)[2]))
+
+```
+
+We will attempt to replicate these probability dynamics by parameterizing a coil using a Particle Swarm Optimizer (PSO). In this case, we will not worry much about forcing locality or inertia; our hope is the PSO will be able to determine these characteristics through optimization. 
+
+```{r}
+#User Selections----
+n.s=dim(exampledata_ballinbox)[2]#number of states
+sym=F   #Parameter Symmetry
+loc=F #Locality
+cont=T #Parameter Physicality Controls
+sub.num=1 #Number of conserved subgroups
+vfara_inert=1 #inertia
+vfara_init=1 #initial inertia
+Tlen=dim(exampledata_ballinbox)[1] #Steps to run coil
+
+buildcoil(n.s,sym=F)
+
+#Number of needed parameters
+L=dim(CoilVals)[1]*2+3+n.s*2
+```
+
+We can now train our particle swarm optimizer. This will most likely take a while so we can use some previously found weights. 
+```{r}
+retrain=F
+
+if (retrain){
+  #Particle Swarm Optimizer
+n.part=100#number of particles
+
+w=0.9 #velocity factor
+g_p=0.4#position influence factor
+g_g=0.4#swarm influence factor
+
+initialize_swarm_full(n.part,L,setrots=c(2,5,5))
+
+for (itt in 1:10){
+  if (itt<400){
+    slseq=array(matrix(seq(1:length(out_goal)),ncol=n.s)[1:round(Tlen/2),])
+    #slseq=c(1:15,26:36,51:61,76:86)
+  }else{
+    slseq=1:length(out_goal)
+  }
+  #slseq=1:length(out_goal)
+
+  step_swarm_full(n.part,L,setrots=c(2,5,5))
+  matplot(t(outmat),col="grey",lty=1,type="l")
+  lines(out_goal,col="blue")
+  print(itt)
+}
+ best_weights=best_p[which.min(apply(best_p_res,1,function(x)optf(x,out_goal,slseq))),]
+}else{
+  best_weights=readRDS("../results/ballinbox_weights_final.RdA")
+}
+coil_out=pop_coil_full(best_weights)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+```
+
+Let us overlay the discrete probability dynamics produced by our coil atop the simulated probability dynamics.  
+
+```{r,fig.width=10,fig.height=5}
+matplot(Pmat,type="l",lwd=2,xlab = "Time",ylab="Probability",main="State Probability Dynamics")
+matlines(exampledata_ballinbox)
+legend("topright", colnames(P.df),col=seq_len(dim(P.df)[2]),cex=0.8,fill=seq_len(dim(P.df)[2]))
+```
+Here we can see that coils can represent probabilistic dynamics of physics-based systems with some training. We can compare these dynamics a bit more clearly by splitting out our graphics by state. 
+```{r,fig.width=10,fig.height=5}
+par(mfrow = c(2, 2))
+for (iP in 1:dim(Pmat)[2]){
+
+  plot(exampledata_ballinbox[,iP],type="l",xlab="Time",ylab="Probability",main = paste("State",iP,"Dynamics "))
+  lines(Pmat[,iP],lty=2)
+}
+
+par(mfrow = c(1,1))
+```
+
+To visualize the probability flowing between discrete states we can animate the probability as well as the real and complex components of the coil. 
+
+```{r,animation.hook="gifski",fig.width=10,fig.height=5}
+ylims=c(min(Re(complex_states),Im(complex_states)),max(Re(complex_states),Im(complex_states)))
+ylims[2]=ylims[2]+0.1
+
+for (itt in 1:Tlen){
+  barplot(Pmat[itt,],space=0,ylab="Value",xlab="State",ylim=ylims)
+  lines(seq(0.5,length(complex_states[itt,])-0.5,1),Im(complex_states[itt,]),col="blue",lwd=2)
+  lines(seq(0.5,length(complex_states[itt,])-0.5,1),Re(complex_states[itt,]),col="red",lwd=2)
+  legend("bottomright",col=c("red","blue"),c("Real","Imaginary"),lty=1,lwd=2)
+}
+
+```
+
+A question that arises naturally is why are coils so difficult to train? Aside from the sheer number of probabilistic tranisition values, coils also exhibit a hypersensitivity to their rotation. In this case we are fixing the rotation values, but let's see how the coil dynamics change when just changing the rotation slightly. 
+```{r}
+new_weights=best_weights
+rdim=dim(CoilVals)[1]
+new_weights[(rdim*2+1):(rdim*2+3)]=c(2,5.00001,5)
+state.sel=1
+matplot(pop_coil_full(new_weights)[[1]][,state.sel],pch=1,type="l",xlim=c(0,(Tlen)),lwd=2,ylim=c(0,1),xlab="Time",ylab=paste("State",state.sel,"Probability"),col="blue")
+matlines(Pmat[,state.sel],lwd=2,type="l",xlim=c(0,(Tlen)),xlab="Time",ylab="P(s)",col="black")
+legend("topright",col=c("blue","black"),c("New Rotation","Old Rotation"),lwd=2)
+```
+
+

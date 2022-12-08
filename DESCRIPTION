@@ -5,7 +5,7 @@ Authors@R:
     person("John", "Myers", , "john.myers1995@gmail.com", role = c("aut", "cre"))
 Description: This package is for the generation and training of self-referencing Bayesian fields (aka coils) 
 	that are parameterized by artificial neural networks.
-License: `use_mit_license()`
+License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:

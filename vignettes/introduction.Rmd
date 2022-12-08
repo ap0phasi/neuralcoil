@@ -1,5 +1,5 @@
 ---
-title: "introduction"
+title: "Introduction to Coils"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{introduction}
@@ -99,7 +99,7 @@ This probability is produced directly by runcoil for convenience, but the probab
 Pmat_check = t(apply(complex_states, 1 , function(x) Re(x*Conj(sum(x)))))
 ```
 
-When visualizing the complex coil values, we can see that conservation is maintained if the complex coil values for each state at a given time add up to equal some point along the complex unit circle. 
+When visualizing the complex coil values, we can see that conservation is maintained if the complex coil values for each state at a given time add up to equal some point along the complex unit circle. In fact, when we set our rotation values when parameterizing the coil we are specifying where along the unit circle conserved subgroups must normalize to. There are three rotation values because the state values must normalize to the same point along the unit circle, the tranisition probabilities can normalize to another point, and the conditional transitional terms can normalize to a third point.  
 
 ## Physically-Informed Control of Coils
 
@@ -107,6 +107,7 @@ We can further explore coil dynamics by imposing physically informed constraints
 
 ```{r,fig.width=10,fig.height=5}
 sym=F   #Parameter Symmetry
+buildcoil(n.s,sym=sym) #Rebuild coil in case symmetry changed
 loc=T #Locality
 cont=T #Parameter Physicality Controls
 sub.num=1 #Number of conserved subgroups
@@ -145,17 +146,16 @@ par(mfrow=c(1,1))
 ```
 
 We can also animate the Real and Imaginary components of the complex coil values
-```{r, animation.hook="gifski",fig.width=10,fig.height=5}
+```{r,animation.hook="gifski",fig.width=10,fig.height=5}
 ylims=c(min(Re(complex_states),Im(complex_states)),max(Re(complex_states),Im(complex_states)))
 ylims[2]=ylims[2]+0.1
 
 for (itt in 1:Tlen){
-  barplot(Pmat[itt,],space=0,ylab="Value",xlab="State",ylim=ylims,)
+  barplot(Pmat[itt,],space=0,ylab="Value",xlab="State",ylim=ylims)
   lines(seq(0.5,length(complex_states[itt,])-0.5,1),Im(complex_states[itt,]),col="blue",lwd=2)
   lines(seq(0.5,length(complex_states[itt,])-0.5,1),Re(complex_states[itt,]),col="red",lwd=2)
-  legend("topright",col=c("red","blue"),c("Real","Imaginary"),lty=1,lwd=2)
+  legend("bottomright",col=c("red","blue"),c("Real","Imaginary"),lty=1,lwd=2)
 }
-
 
 ```
 
