@@ -49,4 +49,9 @@ This package demonstrates how neural networks can be used to parameterize coils 
 
 
 ## Usage
-Please refer to the vignettes for usage and examples. 
+Please refer to the vignettes for usage and examples:
+
+1. [Introduction]
+
+[Introduction]: http://htmlpreview.github.io/?https://github.com/tinyheero/CHL26predictor/blob/master/vignettes/introduction.html
+
