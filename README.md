@@ -10,7 +10,7 @@
 * [Usage](#usage)
 <!-- * [License](#license) -->
 
-##Installation
+## Installation
 ```
 library(devtools)
 install_github("ap0phasi/neuralcoil")
@@ -49,4 +49,4 @@ This package demonstrates how neural networks can be used to parameterize coils 
 
 
 ## Usage
-Please refer to the vignette for usage and examples. 
+Please refer to the vignettes for usage and examples. 
