@@ -23,14 +23,14 @@ library(neuralcoil)
 In this vignette we will explore how coils can be trained to emulate conservative probabilistic systems. For this example let us consider a ball bouncing in a 1 dimensional box, where the original position and velocity of the ball are uncertain. If we partition the box into 4 segments, we can simulate many different instances of the ball bouncing in the box to develop a time-evolving discrete probability distribution of the ball's position.
 
 
-```{r}
+```{r,fig.width=10,fig.height=5}
 #Load in Ball-in-Box data:
 data("exampledata_ballinbox")
 out_goal=as.numeric(exampledata_ballinbox)
 
 
 matplot(exampledata_ballinbox,type="l",lwd=2,xlab = "Time",ylab="Probability",main="State Probability Dynamics")
-legend("topright", colnames(P.df),col=seq_len(dim(P.df)[2]),cex=0.8,fill=seq_len(dim(P.df)[2]))
+legend("topright", paste("State",1:4),col=seq_len(4),cex=0.8,fill=seq_len(dim(exampledata_ballinbox)[2]))
 
 ```
 
@@ -95,7 +95,7 @@ Let us overlay the discrete probability dynamics produced by our coil atop the s
 ```{r,fig.width=10,fig.height=5}
 matplot(Pmat,type="l",lwd=2,xlab = "Time",ylab="Probability",main="State Probability Dynamics")
 matlines(exampledata_ballinbox)
-legend("topright", colnames(P.df),col=seq_len(dim(P.df)[2]),cex=0.8,fill=seq_len(dim(P.df)[2]))
+legend("topright", paste("State",1:4),col=seq_len(4),cex=0.8,fill=seq_len(dim(exampledata_ballinbox)[2]))
 ```
 Here we can see that coils can represent probabilistic dynamics of physics-based systems with some training. We can compare these dynamics a bit more clearly by splitting out our graphics by state. 
 ```{r,fig.width=10,fig.height=5}
@@ -125,7 +125,7 @@ for (itt in 1:Tlen){
 ```
 
 A question that arises naturally is why are coils so difficult to train? Aside from the sheer number of probabilistic tranisition values, coils also exhibit a hypersensitivity to their rotation. In this case we are fixing the rotation values, but let's see how the coil dynamics change when just changing the rotation slightly. 
-```{r}
+```{r,fig.width=10,fig.height=5}
 new_weights=best_weights
 rdim=dim(CoilVals)[1]
 new_weights[(rdim*2+1):(rdim*2+3)]=c(2,5.00001,5)

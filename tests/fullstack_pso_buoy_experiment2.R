@@ -5,6 +5,37 @@ library(neuralcoil)
 library(keras)
 library(tensorflow)
 
+
+autogen_cnn<-function(dfs,n.s,params){
+  visl<-list()
+  cnnl<-list()
+  for (ipp in 1:length(dfs$predictors)){
+    visl[[ipp]]<-keras::layer_input(shape=c(dim(dfs$predictors[[ipp]])[2],1))
+    cnnl[[ipp]]<-visl[[ipp]]%>%
+      keras::layer_conv_1d(filters=64,kernel_size=2,input_shape=c(dim(dfs$predictors[[ipp]])[2],1),activation="relu",batch_size = 1)%>%
+      keras::layer_max_pooling_1d(pool_size=2,batch_size = 1)%>%
+      keras::layer_flatten()
+  }
+  merge<-keras::layer_concatenate(cnnl)%>%
+    keras::layer_dense(units=32,activation="relu")%>%
+    keras::layer_dense(units=16,activation="relu")
+
+  rots<-merge%>%keras::layer_dense(units=3,activation="linear")
+
+  starts<-merge%>%keras::layer_dense(units=n.s*2)%>%layer_activation_seagull(0.1)
+
+  visl[[ipp+1]]<-keras::layer_input(shape=c(dim(dfs$dummy)[2]))
+  dumw<-visl[[ipp+1]]%>%keras::layer_dense(units=params*2,trainable = F)%>%layer_activation_seagull(0.1)
+
+  output <- keras::layer_concatenate(list(rots,starts,dumw))
+
+  model<-keras::keras_model(visl,output)
+
+  return(model)
+}
+
+
+
 #Source Buoy Data
 library(forecastML)
 
@@ -62,7 +93,7 @@ avec<-unlist(weights)
 
 
 #xsamps=sample(1:dim(dfs$objective[[1]])[1],15)
-xsamps=c(3,72,44,100,145)[1]
+xsamps=c(3)
 
 inout<-gen_in_out(dfs,xsamps)
 inputlist<-inout[[1]]
@@ -108,6 +139,7 @@ for (ix in 1:length(xsamps)){
   lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invres,col="red",lwd=2)
   #=lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invobs,col="blue")
 }
+
 
 calparams<-get_params(inputs)
 startvals_opt=calparams$startvals
@@ -177,6 +209,8 @@ for (ix in 1:length(xsamps)){
 
 
 #Train Neural Network to produce these outputs
+
+#Couple notes: The dummy data is because we will be directly inserting the coil parameters we learned in step 1 into the weights of the neural network
 nn_inputs=sapply(1:length(inputlist[[1]]),function(g) do.call(rbind,lapply(inputlist,function(x)x[[g]])))
 
 RandMat=t(matrix(rep(array(t(matrix(c(Re(RandVec),Im(RandVec)),ncol=2))),length(xsamps)),ncol=length(xsamps)))
@@ -236,3 +270,7 @@ print(paste("Difference 2:",sum((model%>%predict(nn_inputs))[1,1:13]-nn_obj[1,1:
 # Rmat=matrix(nn_out[1,12:dim(nn_out)[2]],nrow=2)
 # rvecnew=complex(length(RandVec),Rmat[1,],Rmat[2,])
 # lines(runcoil(rvecnew,nn_out[1,1:3],startvals)[[1]][,1],col="blue")
+
+
+#saveRDS(unlist(get_weights(model)),file="results/buoyasadasd.RdA")
+#assign_weights(weights,weightdim,readRDS("results/buoy_opt5.RdA"))

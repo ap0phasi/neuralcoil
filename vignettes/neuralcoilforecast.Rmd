@@ -1,0 +1,315 @@
+---
+title: "Demonstration of Neural Networks for Coil Parameterization"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{introduction}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,warning = FALSE, message = FALSE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(neuralcoil)
+library(gifski)
+library(kableExtra)
+library(keras)
+library(tensorflow)
+library(lubridate)
+library(dplyr)
+```
+
+# Demonstration of Neural Networks for Coil Parameterization
+
+To explore how neural networks can be used to parameterize coils as well as demonstrate some interesting properties of non-real valued coils, we will attempt to train for multivariate timeseries forecasting. 
+
+For this demonstration we will use the data_buoy dataset from the forecastML package and downsample to a 10-day timestep:
+```{r}
+data("data_buoy",package="forecastML")
+
+clean=data_buoy
+clean[is.na(clean)]=0
+
+
+clean$group=lubridate::floor_date(data_buoy$date,"10 day")
+clean<-as.data.frame(clean%>%group_by(group)%>%summarise_all(mean))
+
+head(clean)
+```
+
+Now we set lookforwards (how many timesteps will we try to forecast) and lookbacks (how many past timesteps do we observe to make out prediction?)
+```{r}
+lookback=10
+lookforward=30
+slen=30 #How many samples in the lookforward to use?
+slseq=round(seq(1,lookforward,length.out = slen))
+states=1 #Which states to calibrate to?
+```
+
+We determine what variable we want to predict and what other variables will help in this prediction, then rearrange the data into lookback and lookforward windows
+```{r,}
+predictors=c("wind_spd","air_temperature")
+objective=c("sea_surface_temperature")
+
+df=clean%>%select(c(predictors,objective))
+df=df[df$sea_surface_temperature>0,]
+
+dfw<-lookwindow(df,lookback,lookforward,predictors,objective)
+```
+
+Recall that coils simulate the flows of probabilities between discrete system states. This data is not expressed as probabilities so for the purposes of this demonstration we will scale our objective feature between 0.2 and 0.6 to allow for the probabilites of a single coil state to be in the same range of the data. 
+```{r}
+scaleran=c(0.2,0.6)
+scaledat<-scalelist(dfw,objrange=scaleran)
+scalesaves<-scaledat$scalesaves
+dfs<-scaledat$scaledlist
+```
+
+## Stage 1: Coil Parameterization
+
+Let us build our base coil. In this approach we will construct a 4-presentation coil, where only one state will be used for predictions and the other three states can be thought of as virtual system states. Please refer to the introduction vignette for more information on these specifications. 
+
+```{r}
+#User Selections----
+n.s=4#number of states
+sym=F   #Parameter Symmetry
+loc=F #Locality
+cont=T #Parameter Physicality Controls
+sub.num=1 #Number of conserved subgroups
+vfara_inert=60#inertia
+vfara_init=100 #initial inertia
+Tlen=lookforward #Steps to run coil
+loadvals=T #Load in previously learned values?
+if (loadvals){
+  savedweights<-readRDS("../results/buoy_single_final.RdA")
+}
+retrain=F #Retrain from saved weights?
+```
+
+The neuralcoil package includes some built-in functions to construct convolutional neural networks capable of parameterizing coils. The structure of these neural networks is such that they perceive prediction features over the lookback window and produce coil complex rotation points, starting values, and coil transition parameters. 
+
+```{r}
+buildcoil(n.s,sym=sym)
+
+model<-autogen_cnn(dfs,n.s,dim(CoilVals)[1])
+
+weights<-get_weights(model)
+weightdim=lapply(weights, dim)
+avec<-unlist(weights)
+```
+
+The neural coil also has built in functions to use particle swarm optimizers to train the aforementioned neural network. We will start by training the neural network to produce rotations, start values, and coil parameters for only one instance of lookbacks and lookforwards.
+```{r}
+xsamps=c(3) #what timestep do we want to train for?
+
+inout<-gen_in_out(dfs,xsamps)
+inputlist<-inout[[1]]
+outputs<-inout[[2]]
+
+if (loadvals&!retrain){
+  assign_weights(weights,weightdim,savedweights)
+}else{
+  n.part=20
+  initialize_swarm(n.part)
+
+  Esave=c()
+  for (itt in 1:100){
+    step_swarm(n.part)
+    Esave=c(Esave,min(bestgs))
+    plot(Esave,type="l")
+  }
+
+  assign_weights(weights,weightdim,bestp[which.min(bestgs),])
+}
+
+```
+
+Let's see the results of this training:
+```{r,fig.width=10,fig.height=5}
+outsave=c()
+par(mfrow=c(length(inputlist),1))
+for (iii in 1:length(inputlist)){
+  inputs=inputlist[[iii]]
+  coil_out=pop_coil(inputs,readout = T)
+
+  plot(outputs[iii,],col="blue",type="l",xlab="lookforward timesteps",ylab="Probability")
+  matlines(coil_out[[1]],col="grey")
+  lines(coil_out[[1]][,1],col="red")
+
+  outsave=rbind(outsave,coil_out[[1]][,1])
+}
+legend("topright",col=c("blue","red","grey"),c("Observed","Modeled","Virtual States"),lwd=1)
+par(mfrow=c(1,1))
+
+```
+Here the coil is trained to replicate the observed dynamics over the lookforward period. What makes this approach interesting is that a self-contained deterministic system has been parameterized to produce these dynamics. Let us invert our scaling and see how our dynamics compare to the entire observed period.
+
+```{r,fig.width=10,fig.height=5}
+plot(df[[objective]][-(1:lookback)],type="l",lwd=1.5,xlab="timesteps",ylab=objective,col="blue")
+for (ix in 1:length(xsamps)){
+  invres=invertscaling(outsave[ix,],scalesaves[dim(scalesaves)[1],],scaleran)
+  invobs=invertscaling(outputs[ix,],scalesaves[dim(scalesaves)[1],],scaleran)
+  lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invres,col="red",lwd=2)
+  #=lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invobs,col="blue")
+}
+legend("topleft",col=c("blue","red"),c("Observed","Modeled"),lwd=1)
+```
+So we have produced a coil where one state produces similar dynamics to what is observed for a lookback and lookforward instance. Can this be extended to be predictive for other periods?
+
+## Stage 2: Coil Rotation
+
+To approach this we should remember an important aspect of coils: they are complex-valued. For conservation recall that all values within a conserved subgroup must sum to be some point along the complex unit circle. It has been demonstrated in the other vignettes that coils can be "rotated" where the coil parameters are the same but the point at which they sum to along the complex unit circle is changed, and this produces completely different dynamics. We will attempt to take the coil parameterization we have found here, and determine if the dynamics for other periods can be determined only through rotating the coil and changing the starting values. In this event, a neural network can be trained that only needs to predict the rotations and starting values based on an observed lookback. 
+
+The particle swarm optimizers within the neural coil package have the ability to optimize the rotation and starting values of a coil directly as opposed to parameterizing all the weights of the associated neural network. 
+
+```{r}
+calparams<-get_params(inputs)
+startvals_opt=calparams$startvals
+rotvals_opt=calparams$rots
+RandVec=calparams$RandVec
+
+xsampsold=xsamps
+xsamps=c(72,44)
+
+inout<-gen_in_out(dfs,xsamps)
+inputlist<-inout[[1]]
+outputs<-inout[[2]]
+
+avec<-c(rep(rotvals_opt,length(xsamps)),rep(c(Re(startvals_opt),Im(startvals_opt)),length(xsamps)))
+
+retrain=F
+
+if (retrain){
+  n.part=20
+  initialize_swarm(n.part,type="direct")
+  
+  Esave=c()
+  for (itt in 1:100){
+    step_swarm(n.part,type="direct")
+    Esave=c(Esave,min(bestgs))
+    #plot(Esave,type="l")
+  }
+  plot(Esave,type="l",xlab="steps",ylab="Error")
+  
+  opt_params<-transform_to_params(bestp[which.min(bestgs),],inputlist)
+}else{
+  opt_params<-transform_to_params(readRDS("../results/buoy_direct_opt.RdA"),inputlist)
+}
+
+```
+
+The particle swarm optimizer has determined the rotation and start values for our two new samples that can produce the appropriate dynamics with the same coil parameterization:
+```{r,fig.width=10,fig.height=5}
+stvals<-opt_params$stvals
+rots<-opt_params$rots
+
+#Append original trained data
+rots<-rbind(rotvals_opt,rots)
+stvals<-rbind(array(t(matrix(c(Re(startvals_opt),Im(startvals_opt)),ncol=2))),stvals)
+xsamps=c(xsampsold,c(72,44))
+
+inout<-gen_in_out(dfs,xsamps)
+inputlist<-inout[[1]]
+outputs<-inout[[2]]
+
+outsave=c()
+for (iii in 1:length(inputlist)){
+  inputs=inputlist[[iii]]
+  stmat<-(matrix(stvals[iii,],nrow=2))
+  startvals<-(complex(n.s,stmat[1,],stmat[2,]))
+  coil_out<-(runcoil(RandVec,rots[iii,],startvals))
+
+  plot(outputs[iii,],col="blue",type="l",xlab="lookforward timesteps",ylab="Probability",main=paste0("Window ",iii))
+  matlines(coil_out[[1]],col="grey")
+  lines(coil_out[[1]][,1],col="red")
+
+  outsave=rbind(outsave,coil_out[[1]][,1])
+}
+legend("topright",col=c("blue","red","grey"),c("Observed","Modeled","Virtual States"),lwd=1)
+```
+
+We can invert the scaling of these directly-optimized results:
+```{r,fig.width=10,fig.height=5}
+plot(df[[objective]][-(1:lookback)],type="l",lwd=1.5,xlab="timesteps",ylab=objective,col="blue")
+for (ix in 1:length(xsamps)){
+  invres=invertscaling(outsave[ix,],scalesaves[dim(scalesaves)[1],],scaleran)
+  invobs=invertscaling(outputs[ix,],scalesaves[dim(scalesaves)[1],],scaleran)
+  lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invres,col="red",lwd=2)
+}
+legend("topleft",col=c("blue","red"),c("Observed","Modeled"),lwd=1)
+```
+Here we can see that a single coil parameterization can produce a wide range of dynamics when rotation and starting values are changed. 
+
+## Stage 3: Neural Network training
+
+We have determined an overall coil parameterization and unique rotation and start values for each interval
+```{r}
+nn_inputs=sapply(1:length(inputlist[[1]]),function(g) do.call(rbind,lapply(inputlist,function(x)x[[g]])))
+
+RandMat=t(matrix(rep(array(t(matrix(c(Re(RandVec),Im(RandVec)),ncol=2))),length(xsamps)),ncol=length(xsamps)))
+nn_obj=cbind(rots,stvals,RandMat)
+
+#We will use a custom loss function because we already know our coil parameters, so we can ignore those. 
+loss_focus<-function(y_true,y_pred){
+  importance_vector=rep(1,(n.s*2+3))
+  importance_vector[4:(n.s*2+3)]=100000
+  k_mean((y_true[,1:(n.s*2+3)]-y_pred[,1:(n.s*2+3)])^2*importance_vector)
+}
+
+retrain=F
+if(retrain){
+  model %>%compile(loss=loss_focus,optimizer="adam")
+  history<-model%>%fit(
+  nn_inputs,
+  nn_obj,
+  epochs=1000,
+  batch_size=1
+)
+}else{
+  set_weights(model,readRDS("../results/buoy_full_neural.RdA"))
+}
+
+```
+
+We can see that the neural network as done a decent job learning the rotations and starting values for each sample period. Recall that coils are extremely sensitive to their rotations, so this training can be difficult even for small windows. 
+```{r,fig.width=10,fig.height=5}
+xsamps=c(3,72,44)
+
+inout<-gen_in_out(dfs,xsamps)
+inputlist<-inout[[1]]
+outputs<-inout[[2]]
+
+outsave=c()
+for (iii in 1:length(inputlist)){
+  inputs=inputlist[[iii]]
+  coil_out=pop_coil(inputs,readout = T)
+
+  plot(outputs[iii,],col="blue",type="l",xlab="lookforward timesteps",ylab="Probability",main=paste0("Window ",iii))
+  matlines(coil_out[[1]],col="grey")
+  lines(coil_out[[1]][,1],col="red")
+
+  outsave=rbind(outsave,coil_out[[1]][,1])
+}
+legend("topright",col=c("blue","red","grey"),c("Observed","Modeled","Virtual States"),lwd=1)
+
+```
+
+
+```{r,fig.width=10,fig.height=5}
+plot(df[[objective]][-(1:lookback)],type="l",lwd=1.5,xlab="timesteps",ylab=objective,col="blue")
+for (ix in 1:length(xsamps)){
+  invres=invertscaling(outsave[ix,],scalesaves[dim(scalesaves)[1],],scaleran)
+  invobs=invertscaling(outputs[ix,],scalesaves[dim(scalesaves)[1],],scaleran)
+  lines(xsamps[ix]:(xsamps[ix]+lookforward-1),invres,col="red",lwd=2)
+}
+legend("topleft",col=c("blue","red"),c("Observed","Modeled"),lwd=1)
+
+```
+In this vignette we have shown that while coils are deterministic, they can have very interesting dynamics where a single coil parameterization can produce a wide range of behaviors simply by changing the rotations and start values. A neural network can be trained to learn the appropriate rotations and starting values based on an observed lookback. 
+
+The approach used here was contrived to showcase some of the functionalities of the neuralcoil package, but there are certainly more concise approaches that can be utilized. The initialize_swarm_full function can be used for a single period to determine the best coil parameters given some rotation, and the direct particle swarm optimizer can be used to determine rotations for many different periods. Finally, a simpler regression approach can be used to predict the rotation values from observed windows, were the start values are assumed to be observed. 
