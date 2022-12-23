@@ -7,6 +7,7 @@
 * [Coil Behaviors](#coil-behaviors)
 * [Physically-Based Control](#physically-based-control)
 * [Pseudo Neural Network Parameterization](#pseudo-neural-network-parameterization)
+* [Background](#background)
 * [Usage](#usage)
 <!-- * [License](#license) -->
 
@@ -52,7 +53,7 @@ The motivation, background, and derivation of probabilistic coils can be found h
 
 1. [Background]
 
-[Backgroun]: https://docs.google.com/document/d/e/2PACX-1vQaaN5-uBjQy8J5WLnZm3fHybOmhNjezxSUw5pn771v7gWzHI4US4KEtbtfE4dU88CzMnIz2SoLNQo2/pub
+[Background]: https://docs.google.com/document/d/e/2PACX-1vQaaN5-uBjQy8J5WLnZm3fHybOmhNjezxSUw5pn771v7gWzHI4US4KEtbtfE4dU88CzMnIz2SoLNQo2/pub
 
 ## Usage
 Please refer to the vignettes for usage and examples:
