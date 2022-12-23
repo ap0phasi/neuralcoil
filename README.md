@@ -47,11 +47,20 @@ Parameter symmetry can be used to formulate coils with identical parameterizatio
 ## Neural Network Parameterization
 This package demonstrates how neural networks can be used to parameterize coils to generate dynamic fields with desired behavior.
 
+## Background
+The motivation, background, and derivation of probabilistic coils can be found here:
+
+1. [Background]
+
+[Backgroun]: https://docs.google.com/document/d/e/2PACX-1vQaaN5-uBjQy8J5WLnZm3fHybOmhNjezxSUw5pn771v7gWzHI4US4KEtbtfE4dU88CzMnIz2SoLNQo2/pub
 
 ## Usage
 Please refer to the vignettes for usage and examples:
 
 1. [Introduction]
+2. [Ball-in-Box Example]
+3. [Neural Coil Forecasting Example]
 
-[Introduction]: http://htmlpreview.github.io/?https://github.com/tinyheero/CHL26predictor/blob/master/vignettes/introduction.html
-
+[Introduction]: http://htmlpreview.github.io/?https://github.com/ap0phasi/neuralcoil/blob/main/vignettes/introduction.html
+[Ball-in-Box Example]: http://htmlpreview.github.io/?https://github.com/ap0phasi/neuralcoil/blob/main/vignettes/ballinbox.html
+[Neural Coil Forecasting Example]: http://htmlpreview.github.io/?https://github.com/ap0phasi/neuralcoil/blob/main/vignettes/neuralcoilforecast.html

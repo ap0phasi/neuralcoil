@@ -22,7 +22,7 @@ library(kableExtra)
 
 # Demonstration and Application of Probablistic Coils
 
-This vignette will demonstrate some of the properties of probablistic coils as well as explore potential applications. For an overview of the motivation, theory, and derivation of coils please see <insert_link>
+This vignette will demonstrate some of the properties of probablistic coils as well as explore potential applications. For an overview of the motivation, theory, and derivation of coils please see the background document from the GitHub repo. 
 
 
 Probablistic Coils are systems of interacting, conserved, nonreal-valued Bayesian fields, where the dynamics of the Bayesian fields are self-referencing. We can use the functions provided in this package to randomly generate a coil and simulate the probabilistic field over a number of timesteps. 
