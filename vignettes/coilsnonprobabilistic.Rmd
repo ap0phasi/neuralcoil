@@ -1,0 +1,148 @@
+---
+title: "Use of Probablistic Coils in Non-Conserved Systems"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{introduction}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+rm(list=ls())
+
+library(neuralcoil)
+library(gifski)
+library(kableExtra)
+```
+
+Previous vignettes have demonstrated the use of coils to describe "flows" of probability, however many real-world datasets and problems are not neatly expressed in terms of probability. A broad claim made my coils is that the dynamics of all systems are in some way based on underlying probabilistic flows. This will demonstrate how coils can be used to represent non-conserved, non-probabilistic systems.
+
+## Single Non-probabilistic System
+
+We will begin by creating a 4-presentation coil as we have done previously. 
+
+```{r}
+#Some interesting seeds
+#set.seed(NULL)
+set.seed(314)
+
+n.s=4
+sym=F   #Parameter Symmetry
+buildcoil(n.s,sym=sym) #Rebuild coil in case symmetry changed
+loc=F #Locality
+cont=T #Parameter Physicality Controls
+sub.num=1 #Number of conserved subgroups
+vfara_inert=20 #inertia
+vfara_init=1 #initial inertia
+```
+
+```{r,include=F}
+CoilVals %>% kable %>% kable_styling("striped", full_width = F) %>%scroll_box(height='250px')
+```
+
+
+```{r}
+rotvals=runif(3,0,1000)
+startvals=complex(length(n.s),runif(n.s,0,1),runif(n.s,0,1))
+RandVec=complex(length(group.index),runif(length(group.index),0,1),runif(length(group.index),0,1))
+Tlen=60
+
+coil_out=runcoil(RandVec = RandVec,rotvals = rotvals,startvals=startvals)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+```
+
+runcoil produces two outputs - the simulated discrete-state probability dynamics over time and the complex coil values over time. Let's visualize them below
+
+```{r,fig.width=10,fig.height=5}
+P.df<-as.data.frame(Pmat)
+colnames(P.df)=gsub("V","S",colnames(P.df))
+#Plots
+layout(matrix(1:3,ncol=3), width = c(2,2,1),height = c(1,1,1))
+#Plot Probability Evolution
+matplot(P.df,type="l",lwd=2,xlab = "Time",ylab="Probability",main="State Probability Dynamics")
+legend("topright", colnames(P.df),col=seq_len(dim(P.df)[2]),cex=0.8,fill=seq_len(dim(P.df)[2]))
+
+#Plot Complex State Values
+g.count <- Tlen
+g.ramp <- gray.colors(g.count, start = 1, end = 0)
+plot(complex(1,0,0),xlab="Real",ylab="Complex",main="Coil Values")
+for (it in 1:Tlen){
+  cums=t(apply(complex_states,1,cumsum))
+  points(cums[it,],col=g.ramp[it])
+  lines(cums[it,],col=g.ramp[it])
+}
+
+par(mar=c(4,0,3,3))
+legend_image <- as.raster(matrix(rev(g.ramp), ncol=1))
+plot(c(0,2),c(0,Tlen),type = 'n', axes = F,xlab = '', ylab = '', main = 'Time')
+text(x=1.5, y = seq(0,Tlen,l=5), labels = seq(0,Tlen,l=5))
+rasterImage(legend_image, 0, 0, 1,Tlen)
+
+par(mfrow=c(1,1))
+```
+What is unique to this example is that we say that these 4 discrete states represent rates of change for a single variable. In this example, we will say these rates of change are:
+
+State 1: -0.5
+State 2: -0.25
+State 3: 0.25
+State 4: 0.5
+
+For every timestep, the coil porbabilities for that timestep will provide the weights for a weighted sum of these rates of change. Applying this approach to the previous coil dynamics, we get the following nonprobabilistic dynamics: 
+```{r,fig.width=10,fig.height=5}
+dchange=(apply(Pmat,1,function(x)sum(x*c(-0.5,-0.25,0.25,0.5))))
+plot(cumsum(dchange),xlab="Time",ylab="Signal",type="l")
+```
+
+## Interaction of Multiple Non-Probabilistic Systems
+
+This approach can be expanded to describe the interaction of multiple nonprobabilistic systems. We will construct an 8-presentation coil with 2 conserved subgroups, effectively creating 2 interacting 4-presentation coils. 
+```{r}
+#Some interesting seeds
+
+#set.seed(NULL)
+#set.seed(13)
+#set.seed(189)
+#set.seed(690)
+#set.seed(699)
+set.seed(985)
+
+
+n.s=8
+sym=F   #Parameter Symmetry
+buildcoil(n.s,sym=sym) #Rebuild coil in case symmetry changed
+loc=F #Locality
+cont=T #Parameter Physicality Controls
+sub.num=2 #Number of conserved subgroups
+vfara_inert=10 #inertia
+vfara_init=1 #initial inertia
+
+rotvals=runif(3,0,1000)
+startvals=complex(length(n.s),runif(n.s,0,1),runif(n.s,0,1))
+RandVec=complex(length(group.index),runif(length(group.index),0,1),runif(length(group.index),0,1))
+Tlen=60
+
+coil_out=runcoil(RandVec = RandVec,rotvals = rotvals,startvals=startvals)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+```
+
+We will apply the same rate of change transformation to these probabilities, however in this case we will apply them to the two conserved subgroups separately. We now have represented the dynamics of two interacting systems. 
+
+```{r,fig.width=10,fig.height=5}
+dchange=(apply(Pmat,1,function(x)colSums(matrix(x*rep(c(-0.5,-0.25,0.25,0.5),sub.num),ncol=sub.num))))
+matplot(apply(dchange,1,cumsum),type="l",xlab="Time",ylab="Value")
+legend("topleft", paste0("System ",1:sub.num),col=seq_len(dim(dchange)[1]),cex=0.8,fill=seq_len(dim(dchange)[1]))
+
+# Pmatnew=Pmat[,1:4]
+# dchange=(apply(Pmatnew,1,function(x)sum(x*c(-0.5,-0.25,0.25,0.5))))
+# lines(cumsum(dchange),xlab="Time",ylab="Signal",type="l",col="blue")
+```
+
