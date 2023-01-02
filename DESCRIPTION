@@ -1,5 +1,5 @@
 Package: neuralcoil
-Title: What the Package Does (One Line, Title Case)
+Title: Tools for Generating and Experimenting with Probabilistic Coils
 Version: 0.0.0.9000
 Authors@R: 
     person("John", "Myers", , "john.myers1995@gmail.com", role = c("aut", "cre"))

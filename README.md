@@ -1,5 +1,5 @@
 # Probabilistic Coils: Nonreal Self-Referencing Bayesian Fields
-> This is a set of scripts for generating and experimenting with probabilistic coils
+> A set of scripts for generating and experimenting with probabilistic coils
 
 ## Table of Contents
 * [Installation](#install)
