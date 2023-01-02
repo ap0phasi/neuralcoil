@@ -159,7 +159,11 @@ runcoil=function(RandVec,rotvals,startvals,prival=NULL){
     if (loc==T){
       Exgs=rbind(Exgs,sbins) #For Locality
     }else{
-      Exgs=rbind(as.matrix(expand.grid(splits)),as.matrix(expand.grid(splits)[,sub.num:1])) #No Locality, segmented
+      #convert splits list to keyvalue
+      keyin=stack(splits)
+      ExM=cbind(keyin[match(ExG[,1],keyin[,1]),2],keyin[match(ExG[,2],keyin[,1]),2])
+      #Exgs=rbind(as.matrix(expand.grid(splits)),as.matrix(expand.grid(splits)[,sub.num:1])) #No Locality, segmented #DOESN't WORK WITH sub.num > 2
+      Exgs=ExG[!ExM[,1]==ExM[,2],]
     }
 
     Pset=split(t(Exgs), rep(1:nrow(Exgs), each = ncol(Exgs)))

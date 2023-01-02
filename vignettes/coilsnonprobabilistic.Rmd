@@ -98,7 +98,7 @@ State 4: 0.5
 For every timestep, the coil porbabilities for that timestep will provide the weights for a weighted sum of these rates of change. Applying this approach to the previous coil dynamics, we get the following nonprobabilistic dynamics: 
 ```{r,fig.width=10,fig.height=5}
 dchange=(apply(Pmat,1,function(x)sum(x*c(-0.5,-0.25,0.25,0.5))))
-plot(cumsum(dchange),xlab="Time",ylab="Signal",type="l")
+plot(cumsum(dchange),xlab="Time",ylab="Value",type="l")
 ```
 
 ## Interaction of Multiple Non-Probabilistic Systems
@@ -139,10 +139,45 @@ We will apply the same rate of change transformation to these probabilities, how
 ```{r,fig.width=10,fig.height=5}
 dchange=(apply(Pmat,1,function(x)colSums(matrix(x*rep(c(-0.5,-0.25,0.25,0.5),sub.num),ncol=sub.num))))
 matplot(apply(dchange,1,cumsum),type="l",xlab="Time",ylab="Value")
-legend("topleft", paste0("System ",1:sub.num),col=seq_len(dim(dchange)[1]),cex=0.8,fill=seq_len(dim(dchange)[1]))
+legend("bottomleft", paste0("System ",1:sub.num),col=seq_len(dim(dchange)[1]),cex=0.8,fill=seq_len(dim(dchange)[1]))
 
 # Pmatnew=Pmat[,1:4]
 # dchange=(apply(Pmatnew,1,function(x)sum(x*c(-0.5,-0.25,0.25,0.5))))
 # lines(cumsum(dchange),xlab="Time",ylab="Signal",type="l",col="blue")
+```
+It may make more sense to simply have 2-presentation coils, where the states just refer to an increase or a decrease.
+
+```{r}
+set.seed(21)
+
+n.s=6
+sym=F   #Parameter Symmetry
+buildcoil(n.s,sym=sym) #Rebuild coil in case symmetry changed
+loc=F #Locality
+cont=T #Parameter Physicality Controls
+sub.num=3 #Number of conserved subgroups
+vfara_inert=1 #inertia
+vfara_init=1 #initial inertia
+
+rotvals=runif(3,0,1000)
+startvals=complex(length(n.s),runif(n.s,0,1),runif(n.s,0,1))
+RandVec=complex(length(group.index),runif(length(group.index),0,1),runif(length(group.index),0,1))
+Tlen=60
+
+coil_out=runcoil(RandVec = RandVec,rotvals = rotvals,startvals=startvals)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+```
+
+```{r,fig.width=10,fig.height=5}
+Prenorm=Pmat
+Prenorm[,1:2]=Prenorm[,1:2]/rowSums(Prenorm[,1:2])
+Prenorm[,3:4]=Prenorm[,3:4]/rowSums(Prenorm[,3:4])
+Prenorm[,5:6]=Prenorm[,5:6]/rowSums(Prenorm[,5:6])
+
+dchange=(apply(Prenorm,1,function(x)colSums(matrix(x*rep(c(-0.01,0.01),sub.num),ncol=sub.num))))
+matplot(apply(dchange,1,cumsum),type="l",xlab="Time",ylab="Value")
+legend("topleft", paste0("System ",1:sub.num),col=seq_len(dim(dchange)[1]),cex=0.8,fill=seq_len(dim(dchange)[1]))
+
 ```
 

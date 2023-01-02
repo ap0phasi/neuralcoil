@@ -20,8 +20,14 @@ library(neuralcoil)
 
 # Parameterizing Coils to Represent Practical Systems
 
-In this vignette we will explore how coils can be trained to emulate conservative probabilistic systems. For this example let us consider a ball bouncing in a 1 dimensional box, where the original position and velocity of the ball are uncertain. If we partition the box into 4 segments, we can simulate many different instances of the ball bouncing in the box to develop a time-evolving discrete probability distribution of the ball's position.
+In this vignette we will explore how coils can be trained to emulate conservative probabilistic systems. For this example let us consider a ball bouncing in a 1 dimensional box, where the original position and velocity of the ball are uncertain. If we partition the box into 4 segments, we can simulate many different instances of the ball bouncing in the box to develop a time-evolving discrete probability distribution of the ball's position:
 
+```{r, echo=FALSE, fig.cap="Ball-In-Box Representation", out.width = '100%'}
+knitr::include_graphics("../figures/BallinBox.png")
+```
+
+
+The results of such a simulation are stored in the exampledata_ballinbox dataset: 
 
 ```{r,fig.width=10,fig.height=5}
 #Load in Ball-in-Box data:
