@@ -1,0 +1,234 @@
+---
+title: "StockForecast"
+output: html_document
+date: '2023-01-08'
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+library(RCurl)
+library(jsonlite)
+library(xml2)
+library(quantmod)
+library(neuralcoil)
+```
+
+## Stock Modeling with Coils
+
+First we will pull in some stock market data and calculate the daily percent change. 
+```{r}
+symbol_list="SPY"
+for (symbol in symbol_list){
+  if (file.exists("../data/SPYdata.csv")){
+    df.dat.daily=read.csv("../data/SPYdata.csv")
+    df.perc.change=data.frame(time=df.dat.daily$time[-1],change=diff(df.dat.daily[,5])/df.dat.daily[-dim(df.dat.daily)[1],5]*100)
+  }else{
+    check=tryCatch(quantmod::getSymbols(symbol),error=function(e) NA)
+df.dat.daily=get(symbol)
+df.dat.daily=data.frame(time=as.POSIXct(paste(index(df.dat.daily),"00:00"),tz="EST"),df.dat.daily[,-dim(df.dat.daily)[2]])
+df.perc.change=data.frame(time=df.dat.daily$time[-1],change=diff(df.dat.daily[,5])/df.dat.daily[-dim(df.dat.daily)[1],5]*100)
+  }
+
+}
+```
+
+We will define two coil states and say a coil value of [1,0] will be the largest percent change, where everything else will be some superposition of these states
+```{r}
+mval=max(abs(df.perc.change$change))
+#Every change = a*mval-b*mval where a+b=1, so change= a*mval-(1-a)*mval = 2*a*mval-mval, so a = (change+mval)/2/mval
+
+avals=(df.perc.change$change+mval)/2/mval
+probflow=data.frame(a=avals,b=1-avals)
+#plot(apply(probflow,1,function(x)sum(x*c(mval,-mval))),df.perc.change$change)
+```
+
+```{r}
+sel.window=1:30
+training_dat=probflow[sel.window,]
+out_goal=unlist(training_dat)
+```
+
+
+```{r}
+n.s=4
+sym=F   #Parameter Symmetry
+buildcoil(n.s,sym=sym) #Rebuild coil in case symmetry changed
+loc=F #Locality
+cont=T #Parameter Physicality Controls
+sub.num=n.s/2 #Number of conserved subgroups
+vfara_inert=1 #inertia
+vfara_init=1 #initial inertia
+Tlen=dim(training_dat)[1]
+
+L=dim(CoilVals)[1]*2+3+n.s*2
+ 
+# rotvals=runif(3,0,1000)
+# startvals=complex(length(n.s),runif(n.s,0,1),runif(n.s,0,1))
+# RandVec=complex(length(group.index),runif(length(group.index),0,1),runif(length(group.index),0,1))
+
+# 
+# coil_out=runcoil(RandVec = RandVec,rotvals = rotvals,startvals=startvals)
+# Pmat=coil_out[[1]]
+# complex_states=coil_out[[2]]
+```
+
+```{r}
+optf<-function(outs,out_goal,slseq){
+  outtemp=cbind(outs[1:Tlen],outs[(Tlen+1):(Tlen*2)])
+  outtemp=outtemp/rowSums(outtemp)
+  outs=array(outtemp)
+  mean(abs(outs[slseq]-out_goal[slseq]))
+}
+assignInNamespace("optf",value=optf,ns="neuralcoil")
+```
+
+```{r}
+retrain=F
+loadprev=F
+
+if (retrain){
+  #Particle Swarm Optimizer
+n.part=200#number of particles
+
+w=0.9 #velocity factor
+g_p=0.4#position influence factor
+g_g=0.4#swarm influence factor
+
+initialize_swarm_full(n.part,L,setrots=c(2,5,5),locfac = 0.3)
+if (loadprev){
+  x.p[1,] = readRDS("../results/stock_best_weights.RdA")
+}
+
+
+for (itt in 1:200){
+  # if (itt<20){
+  #   slseq=c(1:5,16:20)
+  # }else if (itt<50){
+  #   slseq=c(1:15,31:45)
+  # }else{
+  #   slseq=1:length(out_goal)
+  # }
+  slseq=sel.window
+  
+
+  step_swarm_full(n.part,L,w=w,g_p=g_p,g_g=g_g,setrots=c(2,5,5))
+  #plot(x.p[,1:2])
+  print(itt)
+}
+ best_weights=best_p[which.min(apply(best_p_res,1,function(x)optf(x,out_goal,slseq))),]
+  #best_weights=x.p[which.min(apply(outmat,1,function(x)optf(x,out_goal,slseq))),]
+}else{
+ best_weights=readRDS("../results/stock_best_weights.RdA")
+}
+```
+```{r}
+coil_out=pop_coil_full(best_weights)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+```
+```{r}
+Prenorm=Pmat
+Prenorm[,1:2]=Prenorm[,1:2]/rowSums(Prenorm[,1:2])
+Prenorm[,3:4]=Prenorm[,3:4]/rowSums(Prenorm[,3:4])
+#Prenorm[,5:6]=Prenorm[,5:6]/rowSums(Prenorm[,5:6])
+
+matplot(Prenorm[,1:2],type="l",lwd=2)
+matlines(training_dat)
+print(mean(abs(Prenorm[1:30,1]-training_dat[1:30,1])))
+```
+
+```{r}
+modeled_change=Prenorm[,1]*mval-Prenorm[,2]*mval
+#modeled_change=probflow[sel.window,1]*mval-probflow[sel.window,2]*mval
+plot(modeled_change,type="l")
+lines(df.perc.change$change[sel.window],col="blue")
+```
+
+```{r}
+predicted_price=df.dat.daily$SPY.Close[sel.window[1]]
+for (ipp in 1:length(modeled_change)){
+  predicted_price=c(predicted_price,predicted_price[ipp]*(1+modeled_change[ipp]/100))
+}
+obsvals=df.dat.daily$SPY.Close[sel.window]
+plot(obsvals,type="l",col="blue",ylim=c(min(min(obsvals),min(predicted_price)),max(c(obsvals,predicted_price))))
+lines(predicted_price,type="l")
+
+```
+
+```{r}
+Tlen=120
+sel.window=1:120
+
+coil_out=pop_coil_full(best_weights)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+
+Prenorm=Pmat
+Prenorm[,1:2]=Prenorm[,1:2]/rowSums(Prenorm[,1:2])
+Prenorm[,3:4]=Prenorm[,3:4]/rowSums(Prenorm[,3:4])
+
+modeled_change=Prenorm[,1]*mval-Prenorm[,2]*mval
+
+predicted_price=df.dat.daily$SPY.Close[sel.window[1]]
+for (ipp in 1:length(modeled_change)){
+  predicted_price=c(predicted_price,predicted_price[ipp]*(1+modeled_change[ipp]/100))
+}
+obsvals=df.dat.daily$SPY.Close[sel.window]
+plot(obsvals,type="l",col="blue",ylim=c(min(min(obsvals),min(predicted_price)),max(c(obsvals,predicted_price))))
+lines(predicted_price,type="l")
+```
+
+```{r}
+# Tlen=30
+# sel.window=1:30
+# obsvals=df.dat.daily$SPY.Close[sel.window]
+# 
+# 
+# for (icha in seq(-1,1,length.out=20)){
+#   coil_out=pop_coil_full(best_weights+icha*5e-3)
+# Pmat=coil_out[[1]]
+# complex_states=coil_out[[2]]
+# 
+# Prenorm=Pmat
+# Prenorm[,1:2]=Prenorm[,1:2]/rowSums(Prenorm[,1:2])
+# Prenorm[,3:4]=Prenorm[,3:4]/rowSums(Prenorm[,3:4])
+# 
+# modeled_change=Prenorm[,1]*mval-Prenorm[,2]*mval
+# 
+# predicted_price=df.dat.daily$SPY.Close[sel.window[1]]
+# for (ipp in 1:length(modeled_change)){
+#   predicted_price=c(predicted_price,predicted_price[ipp]*(1+modeled_change[ipp]/100))
+# }
+# obsvals=df.dat.daily$SPY.Close[sel.window]
+# plot(obsvals,type="l",col="blue",ylim=c(min(min(obsvals),min(predicted_price)),max(c(obsvals,predicted_price))))
+# lines(predicted_price,type="l")
+# }
+```
+```{r}
+Tlen=120
+sel.window=1:120
+
+plot(obsvals,type="l",col="blue",ylim=c(min(min(obsvals),min(predicted_price)),max(c(obsvals,predicted_price))))
+for (icha in seq(-1,1,length.out=20)){
+  coil_out=pop_coil_full(best_weights+icha*1e-9)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+
+Prenorm=Pmat
+Prenorm[,1:2]=Prenorm[,1:2]/rowSums(Prenorm[,1:2])
+Prenorm[,3:4]=Prenorm[,3:4]/rowSums(Prenorm[,3:4])
+
+modeled_change=Prenorm[,1]*mval-Prenorm[,2]*mval
+
+predicted_price=df.dat.daily$SPY.Close[sel.window[1]]
+for (ipp in 1:length(modeled_change)){
+  predicted_price=c(predicted_price,predicted_price[ipp]*(1+modeled_change[ipp]/100))
+}
+obsvals=df.dat.daily$SPY.Close[sel.window]
+
+lines(predicted_price,type="l")
+}
+```

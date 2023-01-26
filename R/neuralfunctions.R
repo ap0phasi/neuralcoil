@@ -466,7 +466,6 @@ initialize_swarm_full<-function(swarm_size,L,locfac=0.6,setrots=NULL){
   best_p<<-x.p
 }
 
-
 ##############################################################################
 #' Step through Particle Swarm for Full Coil Solution
 #'
@@ -481,23 +480,23 @@ initialize_swarm_full<-function(swarm_size,L,locfac=0.6,setrots=NULL){
 #' @param setrots use fixed rotation values?
 #' @export
 step_swarm_full<-function(swarm_size,L,w=0.9,g_p=0.4,g_g=0.4,setrots=NULL){
-  old_perf=apply(outmat,1,function(x)optf(x,out_goal,slseq))
+  old_perf<<-apply(outmat,1,function(x)optf(x,out_goal,slseq))
   print(min(old_perf))
-  solvedcoil=apply(x.p,1,function(x)pop_coil_full(x)[[1]])
+  solvedcoil<<-apply(x.p,1,function(x)pop_coil_full(x)[[1]])
 
   outmat<<-t(solvedcoil)
   outmat[is.na(outmat)]<<-0
   outmat[abs(outmat)==Inf]<<-0
 
-  n_v=matrix(runif(swarm_size*L,-0.01,0.01),nrow=swarm_size,ncol=L)
-  r_p=matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
-  r_g=matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
+  n_v<<-matrix(runif(swarm_size*L,-1e-4,1e-4),nrow=swarm_size,ncol=L)
+  r_p<<-matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
+  r_g<<-matrix(runif(swarm_size*L,0,1),nrow=swarm_size,ncol=L)
 
-  cmat=t(apply(x.p,1,function(z) order(apply(x.p,1,function(y) sum(abs(y-z))))[-1][1:locality]))
+  cmat<<-t(apply(x.p,1,function(z) order(apply(x.p,1,function(y) sum(abs(y-z))))[-1][1:locality]))
 
   best_g_mat<<-t(apply(cmat,1,function(a) x.p[a,][which.min(apply(outmat[a,],1,function(x)optf(x,out_goal,slseq))),]))
 
-  new.ind=which(apply(outmat,1,function(x)optf(x,out_goal,slseq))<apply(best_p_res,1,function(x)optf(x,out_goal,slseq)))
+  new.ind<<-which(apply(outmat,1,function(x)optf(x,out_goal,slseq))<apply(best_p_res,1,function(x)optf(x,out_goal,slseq)))
 
   best_p[new.ind,]<<-x.p[new.ind,]
   best_p_res[new.ind,]<<-outmat[new.ind,]
