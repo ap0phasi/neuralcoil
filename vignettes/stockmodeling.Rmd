@@ -22,7 +22,7 @@ library(quantmod)
 
 # Stock Price Modeling with Coil Dynamics
 
-We will begin this exercise with a joke: a universe will be constructed that only consists of two things: the price movement of the SPY stock and *not* the price movement of SPY stock. While this is humorous, it is not an ontologically incorrect way of describing reality - perhaps just not a helpful one. 
+We will begin this exercise with a joke: the universe will be described as only existing of two things: the price movement of the SPY stock and *not* the price movement of SPY stock. While this is humorous, it is not an ontologically incorrect way of describing reality - perhaps just not a helpful one. 
 
 Let's load in some SPY stock price data using the quantmod package.
 
@@ -243,4 +243,6 @@ lines(obsvals,col="blue",lwd=2,lty=2)
 legend("topleft",c("Actual","Modeled"),col=c("blue","black"),lty=1)
 ```
 
-Here we can see that even though these different coil dynamics start nearly identically, they quickly diverege from one another into completely different solutions. This extreme sensitivity also demonstrates why coils are so difficult to train. While coils may not et be able to forecast stock price, it is encouraging that they exhibit the same unpredictability and chaos as the systems they are intended to represent. 
+Here we can see that even though these different coil dynamics start nearly identically, they quickly diverge from one another into completely different solutions. This extreme sensitivity also demonstrates why coils are so difficult to train. While coils may not be able to forecast stock price, it is encouraging that they exhibit the same unpredictability and chaos as the systems they are intended to represent. 
+
+A motivated user may try to expand this approach of using internally conserved subgroups to create a larger coil trained to emulate the dynamics of SPY as well as other stocks, each with their own conserved subgroup. While this current approach describes a toy-box reality where SPY stock price simply interacts with *not* SPY stock price, a more complex approach could describe the interactions of a number of stock prices and other measures with one another. 
