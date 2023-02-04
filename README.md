@@ -62,8 +62,10 @@ Please refer to the vignettes for usage and examples:
 2. [Ball-in-Box Example]
 3. [Neural Coil Forecasting Example]
 4. [Use of Coils in Non-Probabilistic Systems]
+5. [Stock Price Modeling with Coils]
 
 [Introduction]: http://htmlpreview.github.io/?https://github.com/ap0phasi/neuralcoil/blob/main/vignettes/introduction.html
 [Ball-in-Box Example]: http://htmlpreview.github.io/?https://github.com/ap0phasi/neuralcoil/blob/main/vignettes/ballinbox.html
 [Neural Coil Forecasting Example]: http://htmlpreview.github.io/?https://github.com/ap0phasi/neuralcoil/blob/main/vignettes/neuralcoilforecast.html
 [Use of Coils in Non-Probabilistic Systems]: http://htmlpreview.github.io/?https://github.com/ap0phasi/neuralcoil/blob/main/vignettes/coilsnonprobabilistic.html
+[Stock Price Modeling with Coils]: http://htmlpreview.github.io/?https://github.com/ap0phasi/neuralcoil/blob/main/vignettes/stockmodeling.html

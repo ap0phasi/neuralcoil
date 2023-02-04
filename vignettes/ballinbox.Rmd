@@ -118,14 +118,21 @@ par(mfrow = c(1,1))
 To visualize the probability flowing between discrete states we can animate the probability as well as the real and complex components of the coil. 
 
 ```{r,animation.hook="gifski",fig.width=10,fig.height=5}
+library(ggplot2)
+
 ylims=c(min(Re(complex_states),Im(complex_states)),max(Re(complex_states),Im(complex_states)))
 ylims[2]=ylims[2]+0.1
 
 for (itt in 1:Tlen){
-  barplot(Pmat[itt,],space=0,ylab="Value",xlab="State",ylim=ylims)
-  lines(seq(0.5,length(complex_states[itt,])-0.5,1),Im(complex_states[itt,]),col="blue",lwd=2)
-  lines(seq(0.5,length(complex_states[itt,])-0.5,1),Re(complex_states[itt,]),col="red",lwd=2)
-  legend("bottomright",col=c("red","blue"),c("Real","Imaginary"),lty=1,lwd=2)
+  datin=data.frame(state=c(1,2,3,4),value=Pmat[itt,],Real=Re(complex_states)[itt,],Imaginary=Im(complex_states)[itt,])
+  p <- ggplot(datin,
+                 aes(state,value)) +
+    geom_bar(stat = "identity",width=1,fill="grey",color="black")+
+    geom_line(aes(x=as.numeric(state),y=Real,col="Real"),size=1.5)+
+    geom_line(aes(x=as.numeric(state),y=Imaginary,col="Imaginary"),size=1.5)+
+    theme(axis.title.x = element_blank())+
+    scale_y_continuous(limits = ylims)
+  print(p)
 }
 
 ```

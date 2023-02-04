@@ -1,0 +1,246 @@
+---
+title: "Use of Coils for Stock Price Modeling"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{se of Coils for Stock Price Modeling}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(neuralcoil)
+library(quantmod)
+```
+
+# Stock Price Modeling with Coil Dynamics
+
+We will begin this exercise with a joke: a universe will be constructed that only consists of two things: the price movement of the SPY stock and *not* the price movement of SPY stock. While this is humorous, it is not an ontologically incorrect way of describing reality - perhaps just not a helpful one. 
+
+Let's load in some SPY stock price data using the quantmod package.
+
+```{r}
+symbol="SPY"
+check=tryCatch(quantmod::getSymbols(symbol),error=function(e) NA)
+df.dat.daily=get(symbol)
+df.dat.daily=data.frame(time=as.POSIXct(paste(index(df.dat.daily),"00:00"),tz="EST"),df.dat.daily[,-dim(df.dat.daily)[2]])
+```
+
+We can calculate the daily percent change as well as the maximum absolute percent change for the available data.
+
+```{r}
+df.perc.change=data.frame(time=df.dat.daily$time[-1],change=diff(df.dat.daily[,5])/df.dat.daily[-dim(df.dat.daily)[1],5]*100)
+mval=max(abs(df.perc.change$change))
+```
+
+Now let us say that every daily percent change is expressed as some combination of the maximum percent increase and the maximum percent decrease. That is to say:
+
+$$
+\Delta_{day} = a\Delta_{max}-b\Delta_{max}
+$$
+
+where 
+
+$$
+a + b = 1
+$$
+
+It follows that 
+
+$$
+a = \frac{\Delta_{day}+\Delta_{max}}{2\Delta_{max}}
+$$
+Using this we can create a timeseries of the probabilistic flow between *a* and *b*. 
+```{r}
+avals=(df.perc.change$change+mval)/2/mval
+probflow=data.frame(a=avals,b=1-avals)
+```
+
+For this exercise we will just use the first 30 days of stock movement. 
+
+```{r}
+sel.window=1:30
+training_dat=probflow[sel.window,]
+out_goal=unlist(training_dat)
+
+matplot(probflow[1:30,],type="l",ylab="Probablity",xlab="Day",lwd=2)
+legend("bottomleft",c("a","b"),col=c("black","red"),lty=1)
+```
+
+## Coil Construction and Parameterization
+
+For this application, we will build a 4-presentation coil describing the states *a*, *b*, and then two dummy states describing "everything else". We want the sum of probabilities of *a* and *b* to be constant, so we will use two internally conserved normalized subgroups. 
+```{r}
+n.s=4
+sym=F   #Parameter Symmetry
+buildcoil(n.s,sym=sym) #Rebuild coil in case symmetry changed
+loc=F #Locality
+cont=T #Parameter Physicality Controls
+sub.num=n.s/2 #Number of conserved subgroups
+vfara_inert=1 #inertia
+vfara_init=1 #initial inertia
+Tlen=dim(training_dat)[1]
+
+L=dim(CoilVals)[1]*2+3+n.s*2
+```
+
+We don't have any dummy data that we care about matching the "everything else" states to, so we will modify our objective function:
+```{r}
+optf<-function(outs,out_goal,slseq){
+  outtemp=cbind(outs[1:Tlen],outs[(Tlen+1):(Tlen*2)])
+  outtemp=outtemp/rowSums(outtemp)
+  outs=array(outtemp)
+  mean(abs(outs[slseq]-out_goal[slseq]))
+}
+assignInNamespace("optf",value=optf,ns="neuralcoil")
+```
+
+We will use a particle swarm optimizer to attempt to fit our coil to the observed probability dynamics, or just load some previously found weights. 
+```{r}
+retrain=F
+loadprev=F
+
+if (retrain){
+  #Particle Swarm Optimizer
+n.part=200#number of particles
+
+w=0.9 #velocity factor
+g_p=0.4#position influence factor
+g_g=0.4#swarm influence factor
+
+initialize_swarm_full(n.part,L,setrots=c(2,5,5),locfac = 0.3)
+if (loadprev){
+  x.p[1,] = readRDS("../results/stock_best_weights.RdA")
+}
+
+
+for (itt in 1:200){
+  slseq=sel.window
+  
+
+  step_swarm_full(n.part,L,w=w,g_p=g_p,g_g=g_g,setrots=c(2,5,5))
+  print(itt)
+}
+ best_weights=best_p[which.min(apply(best_p_res,1,function(x)optf(x,out_goal,slseq))),]
+}else{
+ best_weights=readRDS("../results/stock_best_weights.RdA")
+}
+```
+
+Let us evaluate the modeled coil dynamics. 
+```{r}
+coil_out=pop_coil_full(best_weights)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+```
+
+We will need to normalize the conserved subgroups of the modeled probability dynamics to compare to our observed data. 
+```{r}
+Prenorm=Pmat
+Prenorm[,1:2]=Prenorm[,1:2]/rowSums(Prenorm[,1:2])
+Prenorm[,3:4]=Prenorm[,3:4]/rowSums(Prenorm[,3:4])
+
+matplot(training_dat,type="l",ylab="Probablity",xlab="Day",lwd=2,col="grey")
+matlines(Prenorm[,1:2],lwd=2)
+legend("bottomleft",c("a","b"),col=c("black","red"),lty=1)
+```
+
+To visualize the probability flowing between discrete states we can animate the probability as well as the real and complex components of the coil. 
+
+```{r,animation.hook="gifski",fig.width=10,fig.height=5}
+library(ggplot2)
+
+ylims=c(min(Re(complex_states),Im(complex_states)),max(Re(complex_states),Im(complex_states)))
+ylims[2]=ylims[2]+0.1
+
+for (itt in 1:Tlen){
+  datin=data.frame(name=c("a","b","dummy1","dummy2"),x=c(1,2,3,4),value=Pmat[itt,],Real=Re(complex_states)[itt,],Imaginary=Im(complex_states)[itt,])
+  p <- ggplot(datin,
+                 aes(x,value)) +
+    geom_bar(stat = "identity")+
+    geom_text(aes(label = name),nudge_y = 0.02)+
+    geom_line(aes(x=as.numeric(x),y=Real,col="Real"),size=1.5)+
+    geom_line(aes(x=as.numeric(x),y=Imaginary,col="Imaginary"),size=1.5)+
+    theme(axis.title.x = element_blank())+
+    scale_y_continuous(limits = ylims)
+  print(p)
+}
+```
+
+These results look good from the probabilistic flow perspective, but to really see the quality of the model we can calculate the stock price from the modeled coil probabilistic flows:
+```{r}
+modeled_change=Prenorm[,1]*mval-Prenorm[,2]*mval
+predicted_price=df.dat.daily$SPY.Close[sel.window[1]]
+for (ipp in 1:length(modeled_change)){
+  predicted_price=c(predicted_price,predicted_price[ipp]*(1+modeled_change[ipp]/100))
+}
+obsvals=df.dat.daily$SPY.Close[sel.window]
+plot(obsvals,type="l",col="blue",ylim=c(min(min(obsvals),min(predicted_price)),max(c(obsvals,predicted_price))),xlab="Time",ylab="SPY Stock Price",lwd=2,lty=2)
+lines(predicted_price,type="l",lwd=2)
+legend("topleft",c("Actual","Modeled"),col=c("blue","black"),lty=1)
+```
+## Forecasting of Stock Price with Probabilistic Coils
+
+Note that we have only discussed the modeling of stock price using coils. The forecasting of stock prices is another endeavor entirely. Let us run the coil for 120 days and compare the modeled stock price. 
+```{r}
+Tlen=120
+sel.window=1:120
+
+coil_out=pop_coil_full(best_weights)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+
+Prenorm=Pmat
+Prenorm[,1:2]=Prenorm[,1:2]/rowSums(Prenorm[,1:2])
+Prenorm[,3:4]=Prenorm[,3:4]/rowSums(Prenorm[,3:4])
+
+modeled_change=Prenorm[,1]*mval-Prenorm[,2]*mval
+
+predicted_price=df.dat.daily$SPY.Close[sel.window[1]]
+for (ipp in 1:length(modeled_change)){
+  predicted_price=c(predicted_price,predicted_price[ipp]*(1+modeled_change[ipp]/100))
+}
+obsvals=df.dat.daily$SPY.Close[sel.window]
+plot(obsvals,type="l",col="blue",ylim=c(min(min(obsvals),min(predicted_price)),max(c(obsvals,predicted_price))),xlab="Time",ylab="SPY Stock Price",lwd=2,lty=2)
+lines(predicted_price,type="l",lwd=2)
+legend("topleft",c("Actual","Modeled"),col=c("blue","black"),lty=1)
+```
+
+It is not surprising that although we were able to successfully model stock price for 30 days that this coil parameterization does not inherently produce good predictions for longer periods, as coils behave chaotically. To demonstrate this, we can run this same coil many times where we are only making a miniscule change to the parameterization:
+
+```{r}
+Tlen=120
+sel.window=1:120
+
+plot(obsvals,type="l",col="blue",ylim=c(min(min(obsvals),min(predicted_price)),max(c(obsvals,predicted_price))))
+for (icha in seq(-1,1,length.out=20)){
+  coil_out=pop_coil_full(best_weights+icha*1e-9)
+Pmat=coil_out[[1]]
+complex_states=coil_out[[2]]
+
+Prenorm=Pmat
+Prenorm[,1:2]=Prenorm[,1:2]/rowSums(Prenorm[,1:2])
+Prenorm[,3:4]=Prenorm[,3:4]/rowSums(Prenorm[,3:4])
+
+modeled_change=Prenorm[,1]*mval-Prenorm[,2]*mval
+
+predicted_price=df.dat.daily$SPY.Close[sel.window[1]]
+for (ipp in 1:length(modeled_change)){
+  predicted_price=c(predicted_price,predicted_price[ipp]*(1+modeled_change[ipp]/100))
+}
+obsvals=df.dat.daily$SPY.Close[sel.window]
+
+lines(predicted_price,type="l",lwd=2,lty=1)
+}
+lines(obsvals,col="blue",lwd=2,lty=2)
+legend("topleft",c("Actual","Modeled"),col=c("blue","black"),lty=1)
+```
+
+Here we can see that even though these different coil dynamics start nearly identically, they quickly diverege from one another into completely different solutions. This extreme sensitivity also demonstrates why coils are so difficult to train. While coils may not et be able to forecast stock price, it is encouraging that they exhibit the same unpredictability and chaos as the systems they are intended to represent. 
